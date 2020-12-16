@@ -1,9 +1,9 @@
 /**
- * File              : main.go
- * Author            : Alexandre Saison <alexandre.saison@inarix.com>
- * Date              : 09.12.2020
- * Last Modified Date: 16.12.2020
- * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
+* File              : main.go
+* Author            : Alexandre Saison <alexandre.saison@inarix.com>
+* Date              : 09.12.2020
+* Last Modified Date: 16.12.2020
+* Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
 
@@ -25,19 +25,17 @@ type PodManager struct {
 
 func New(inCluster bool) *PodManager {
 
-	if inCluster {
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			panic(err.Error())
-		}
+	var config *rest.Config
+	var err error
 
-		clientset, err := kubernetes.NewForConfig(config)
+	if inCluster {
+		config, err = rest.InClusterConfig()
 		if err != nil {
 			panic(err.Error())
+			return nil
 		}
-		return &PodManager{client: clientset}
 	} else {
-		config, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+		config, err = clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 		if err != nil {
 			log.Panicln(err.Error())
 		}
