@@ -8,9 +8,11 @@
 package main
 
 import (
+	podManager "github.com/saisona/go-feather-slack-app/src/go-feather-slack-app/manager"
 	server "github.com/saisona/go-feather-slack-app/src/go-feather-slack-app/server"
 )
 
 func main() {
-	server.Listen()
+	manager := podManager.New(false)
+	server.Listen(*manager)
 }

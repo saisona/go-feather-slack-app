@@ -2,13 +2,13 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 09.12.2020
+ * Last Modified Date: 16.12.2020
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
 
 import (
-	"fmt"
+	"log"
 	"os"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -39,14 +39,13 @@ func New(inCluster bool) *PodManager {
 	} else {
 		config, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 		if err != nil {
-			fmt.Println("ERR ", err.Error())
-			panic(err.Error())
+			log.Panicln(err.Error())
 		}
 
 		// creates the clientset
 		clientset, err := kubernetes.NewForConfig(config)
 		if err != nil {
-			panic(err.Error())
+			log.Panicln(err.Error())
 		}
 		return &PodManager{client: clientset}
 	}
@@ -73,7 +72,7 @@ func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec b
 	if err != nil {
 		return false, err
 	}
-	fmt.Printf("Job %s has been created successfuly", job.GetName())
+	log.Printf("Job %s has been created successfuly", job.GetName())
 	return true, nil
 }
 
