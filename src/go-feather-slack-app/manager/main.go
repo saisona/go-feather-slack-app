@@ -25,31 +25,27 @@ type PodManager struct {
 
 func New(inCluster bool) *PodManager {
 
+        var config *rest.Config
+        var err error
+ 
 	if inCluster {
-		config, err := rest.InClusterConfig()
+		config, err = rest.InClusterConfig()
 		if err != nil {
 			panic(err.Error())
 		}
-
-		clientset, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			panic(err.Error())
-		}
-		return &PodManager{client: clientset}
 	} else {
-		config, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+		config, err = clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 		if err != nil {
 			fmt.Println("ERR ", err.Error())
 			panic(err.Error())
 		}
-
-		// creates the clientset
-		clientset, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			panic(err.Error())
-		}
-		return &PodManager{client: clientset}
 	}
+	
+	clientSet, err := kubernetes.NewForConfig(config)
+        if err != nil {
+		panic(err.Error())
+	}
+	return &PodManager{client: clientSet}
 }
 
 func (self *PodManager) GetPods(namespace string) (*v1.PodList, error) {
