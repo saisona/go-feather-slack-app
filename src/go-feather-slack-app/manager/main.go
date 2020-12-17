@@ -2,7 +2,7 @@
 * File              : main.go
 * Author            : Alexandre Saison <alexandre.saison@inarix.com>
 * Date              : 09.12.2020
-* Last Modified Date: 16.12.2020
+* Last Modified Date: 17.12.2020
 * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -40,13 +40,14 @@ func New(inCluster bool) *PodManager {
 			log.Panicln(err.Error())
 		}
 
-		// creates the clientset
-		clientset, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			log.Panicln(err.Error())
-		}
-		return &PodManager{client: clientset}
 	}
+
+	// creates the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Panicln(err.Error())
+	}
+	return &PodManager{client: clientset}
 }
 
 func (self *PodManager) GetPods(namespace string) (*v1.PodList, error) {
