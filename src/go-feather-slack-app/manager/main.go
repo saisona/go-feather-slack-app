@@ -2,7 +2,7 @@
 * File              : main.go
 * Author            : Alexandre Saison <alexandre.saison@inarix.com>
 * Date              : 09.12.2020
-* Last Modified Date: 17.12.2020
+* Last Modified Date: 18.12.2020
 * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -32,7 +32,6 @@ func New(inCluster bool) *PodManager {
 		config, err = rest.InClusterConfig()
 		if err != nil {
 			panic(err.Error())
-			return nil
 		}
 	} else {
 		config, err = clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
