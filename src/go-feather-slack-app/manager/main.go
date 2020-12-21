@@ -2,7 +2,7 @@
 * File              : main.go
 * Author            : Alexandre Saison <alexandre.saison@inarix.com>
 * Date              : 09.12.2020
-* Last Modified Date: 18.12.2020
+* Last Modified Date: 21.12.2020
 * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -49,6 +49,16 @@ func New(inCluster bool) *PodManager {
 	return &PodManager{client: clientset}
 }
 
+func (self *PodManager) CreateConfigRefSpec(configMapRefsNames []string) []v1.ConfigMapEnvSource {
+	configMapRefs := make([]v1.ConfigMapEnvSource, len(configMapRefsNames))
+	for index, configMapName := range configMapRefsNames {
+		isOptionnal := false
+		tmpConfigMapRef := &v1.ConfigMapEnvSource{LocalObjectReference: v1.LocalObjectReference{Name: configMapName}, Optional: &isOptionnal}
+		configMapRefs[index] = *tmpConfigMapRef
+	}
+	return configMapRefs
+}
+
 func (self *PodManager) GetPods(namespace string) (*v1.PodList, error) {
 	return self.client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 }
@@ -57,7 +67,7 @@ func (self *PodManager) GetPod(namespace string, podName string) (*v1.Pod, error
 	return self.client.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 }
 
-func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec batchv1.JobSpec) (bool, error) {
+func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec batchv1.JobSpec) error {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: prefixName,
@@ -68,14 +78,14 @@ func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec b
 	job, err := self.client.BatchV1().Jobs(namespace).Create(job)
 
 	if err != nil {
-		return false, err
+		return err
 	}
 	log.Printf("Job %s has been created successfuly", job.GetName())
-	return true, nil
+	return nil
 }
 
-func (self *PodManager) CreateJobSpecWithEnvVariable(jobNamePrefix string, containerName string, containerImage string, envs []v1.EnvVar) *batchv1.JobSpec {
-	return &batchv1.JobSpec{
+func (self *PodManager) CreateJobSpec(jobNamePrefix string, containerName string, containerImage string, envs []v1.EnvVar, configMapRefs []v1.ConfigMapEnvSource) *batchv1.JobSpec {
+	jobSpec := &batchv1.JobSpec{
 		Template: v1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: jobNamePrefix,
@@ -85,12 +95,27 @@ func (self *PodManager) CreateJobSpecWithEnvVariable(jobNamePrefix string, conta
 					{
 						Name:  containerName,
 						Image: containerImage,
-						Env:   envs,
 					},
 				},
-
 				RestartPolicy: v1.RestartPolicyNever,
 			},
 		},
 	}
+	if envs != nil || len(envs) > 0 {
+		log.Printf("Adding %d environment variable to the container %s", len(envs), containerName)
+		jobSpec.Template.Spec.Containers[0].Env = envs
+	}
+
+	if configMapRefs != nil || len(configMapRefs) > 0 {
+		log.Printf("Adding %d configMapRefs to the container %s", len(configMapRefs), containerName)
+		envFrom := make([]v1.EnvFromSource, len(configMapRefs))
+		for index, configMapRef := range configMapRefs {
+			var envSource v1.EnvFromSource
+			envSource = v1.EnvFromSource{ConfigMapRef: &configMapRef}
+			envFrom[index] = envSource
+		}
+		jobSpec.Template.Spec.Containers[0].EnvFrom = envFrom
+	}
+
+	return jobSpec
 }
