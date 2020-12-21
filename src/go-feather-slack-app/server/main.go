@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 18.12.2020
+ * Last Modified Date: 21.12.2020
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -11,76 +11,95 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 
 	PodManager "github.com/saisona/go-feather-slack-app/src/go-feather-slack-app/manager"
-	v1 "k8s.io/api/core/v1"
 )
-
-type Server struct {
-	port    int
-	manager PodManager.PodManager
-}
-
-type PodRequestPayload struct {
-	namespace string
-}
 
 func healthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func sendStatusMEthodNotAllowed(w http.ResponseWriter) {
+func fromBodyToStruct(httpBody io.ReadCloser, structHandler interface{}) error {
+	body, err := ioutil.ReadAll(httpBody)
+	if err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal(body, &structHandler); err != nil {
+		return err
+	}
+	return nil
+}
+
+func sendStatusMethodNotAllowed(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusMethodNotAllowed)
 	w.Write(nil)
+}
+
+func sendStatusInternalError(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusInternalServerError)
+	fmt.Fprintln(w, "An error occured please look at the logs !")
 }
 
 func (self *Server) Pods() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
-			sendStatusMEthodNotAllowed(w)
+			sendStatusMethodNotAllowed(w)
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			fmt.Fprintf(w, "ParseForm() err: %v", err)
+		var FormValues PodsRequestPayload
+		if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
+			log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
+			sendStatusInternalError(w)
 			return
+		}
+
+		log.Printf("Selected namespace for pod introspection is %s", FormValues.Namespace)
+		pods, err := self.manager.GetPods(FormValues.Namespace)
+		if err != nil {
+			w.WriteHeader(500)
+			fmt.Fprintln(w, err.Error())
+		}
+		marchalled_kubernetes_items, err := json.Marshal(pods.Items)
+		if err != nil {
+			w.WriteHeader(500)
+			fmt.Fprintln(w, err.Error())
 		}
 		w.Header().Add("Content-Type", "application/json")
-		pods, err := self.manager.GetPods(r.Form.Get("namespace"))
-		if err != nil {
-			w.WriteHeader(500)
-			fmt.Fprintln(w, err.Error())
-		}
-		marchalled_json, err := json.Marshal(pods.Items)
-		if err != nil {
-			w.WriteHeader(500)
-			fmt.Fprintln(w, err.Error())
-		}
-		fmt.Fprintln(w, string(marchalled_json))
+		fmt.Fprintln(w, string(marchalled_kubernetes_items))
 	}
 }
 
 func (self *Server) CreateJob() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
-			sendStatusMEthodNotAllowed(w)
+			sendStatusMethodNotAllowed(w)
 			return
 		}
-		env := []v1.EnvVar{v1.EnvVar{Name: "INARIX_API_HOST", Value: "api.inarix.com"}, v1.EnvVar{Name: "INARIX_API_USERNAME", Value: "toto"}, v1.EnvVar{Name: "INARIX_API_PASSWORD", Value: "tata"}}
-		jobSpec := self.manager.CreateJobSpecWithEnvVariable("migration_test", "migration-job", "894517829775.dkr.ecr.eu-west-1.amazonaws.com/inarix-api:v1.14.0-staging", env)
-		_, err := self.manager.CreateJob("default", "migration", *jobSpec)
 
-		if err != nil {
+		var FormValues JobCreationPayload
+		if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
+			log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
+			sendStatusInternalError(w)
+			return
+		}
+		configMapRefs := self.manager.CreateConfigRefSpec(FormValues.ConfigMapsNames)
+		prefixName := FormValues.JobName + "-job"
+		jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, nil, configMapRefs)
+		log.Println("Created configMaps ", configMapRefs)
+
+		fmt.Fprintf(w, "Job %s has been created on %s with image : %s", FormValues.JobName, FormValues.Namespace, FormValues.DockerImage)
+
+		if err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "Error during creation of Job : %s", err.Error())
 		}
-
-		w.WriteHeader(http.StatusCreated)
-		fmt.Fprintf(w, "Job %s has been created", jobSpec.Template.Name)
-
 	}
 }
 
@@ -103,6 +122,7 @@ func Listen(manager PodManager.PodManager) {
 	http.HandleFunc("/migrate", server.CreateJob())
 	http.HandleFunc("/healthz", healthz)
 
+	log.Println("Server started on port " + appPortStr)
 	if err := http.ListenAndServe(":"+appPortStr, nil); err != nil {
 		panic(err.Error())
 	}
