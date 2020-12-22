@@ -8,6 +8,9 @@
 package podManager
 
 import (
+	"errors"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 
@@ -80,8 +83,34 @@ func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec b
 	if err != nil {
 		return err
 	}
+
 	log.Printf("Job %s has been created successfuly", job.GetName())
+	log.Println("Job Created Labels -> ", job.Labels)
+	log.Println("Job Created Annotations -> ", job.Annotations)
+	pod, err := self.fetchPodNameFromJobName(namespace, job.GetName())
+	if err != nil {
+		return err
+	}
+	logs, err := self.GetPodLogs(namespace, pod.GetName(), false)
+	if err != nil {
+		return err
+	}
+	log.Println("Logs from getting logs are -> ", logs)
 	return nil
+}
+
+func (self *PodManager) fetchPodNameFromJobName(namespace string, jobName string) (*v1.Pod, error) {
+	labelSelector := "job-name=" + jobName
+	pods, err := self.client.CoreV1().Pods(namespace).List(metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return nil, err
+	}
+	if len(pods.Items) == 1 {
+		return &pods.Items[0], nil
+	}
+
+	errorMessage := fmt.Sprintf("No pod found with job-name=%s on namespace %s", jobName, namespace)
+	return nil, errors.New(errorMessage)
 }
 
 func (self *PodManager) CreateJobSpec(jobNamePrefix string, containerName string, containerImage string, envs []v1.EnvVar, configMapRefs []v1.ConfigMapEnvSource) *batchv1.JobSpec {
@@ -117,4 +146,22 @@ func (self *PodManager) CreateJobSpec(jobNamePrefix string, containerName string
 	}
 
 	return jobSpec
+}
+
+func (self *PodManager) GetPodLogs(namespace string, podName string, async bool) (string, error) {
+	podLogOpts := v1.PodLogOptions{Follow: true}
+	req := self.client.CoreV1().Pods(namespace).GetLogs(podName, &podLogOpts)
+	reader, err := req.Stream()
+	if err != nil {
+		panic(err.Error())
+	}
+	defer reader.Close()
+	body, err := ioutil.ReadAll(reader)
+
+	if err != nil {
+		log.Println("POD_READING_FAILURE : ", err.Error())
+		return "", errors.New("An error occured during reading pod logs, watch over server pod logs for more informations")
+	}
+	log.Println("Logs are : ", string(body))
+	return string(body), nil
 }
