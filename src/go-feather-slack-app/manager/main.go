@@ -109,7 +109,7 @@ func (self *PodManager) CreateJobSpec(jobNamePrefix string, containerName string
 	if configMapRefs != nil || len(configMapRefs) > 0 {
 		log.Printf("Adding %d configMapRefs to the container %s", len(configMapRefs), containerName)
 		envFrom := make([]v1.EnvFromSource, len(configMapRefs))
-		for index, _ := range configMapRefs {
+		for index := range configMapRefs {
 			envSource := v1.EnvFromSource{ConfigMapRef: &configMapRefs[index]}
 			envFrom[index] = envSource
 		}
