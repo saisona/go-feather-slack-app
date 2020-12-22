@@ -92,8 +92,6 @@ func (self *Server) CreateJob() http.HandlerFunc {
 		configMapRefs := self.manager.CreateConfigRefSpec(FormValues.ConfigMapsNames)
 		prefixName := FormValues.JobName + "-job"
 		jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, nil, configMapRefs)
-		log.Println("Created configMaps ", configMapRefs)
-
 		fmt.Fprintf(w, "Job %s has been created on %s with image : %s", FormValues.JobName, FormValues.Namespace, FormValues.DockerImage)
 
 		if err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec); err != nil {
