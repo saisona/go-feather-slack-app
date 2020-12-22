@@ -2,7 +2,7 @@
 * File              : main.go
 * Author            : Alexandre Saison <alexandre.saison@inarix.com>
 * Date              : 09.12.2020
-* Last Modified Date: 21.12.2020
+* Last Modified Date: 22.12.2020
 * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -109,9 +109,8 @@ func (self *PodManager) CreateJobSpec(jobNamePrefix string, containerName string
 	if configMapRefs != nil || len(configMapRefs) > 0 {
 		log.Printf("Adding %d configMapRefs to the container %s", len(configMapRefs), containerName)
 		envFrom := make([]v1.EnvFromSource, len(configMapRefs))
-		for index, configMapRef := range configMapRefs {
-			var envSource v1.EnvFromSource
-			envSource = v1.EnvFromSource{ConfigMapRef: &configMapRef}
+		for index, _ := range configMapRefs {
+			envSource := v1.EnvFromSource{ConfigMapRef: &configMapRefs[index]}
 			envFrom[index] = envSource
 		}
 		jobSpec.Template.Spec.Containers[0].EnvFrom = envFrom
