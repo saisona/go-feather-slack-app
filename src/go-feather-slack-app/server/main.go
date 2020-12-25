@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 21.12.2020
+ * Last Modified Date: 25.12.2020
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -66,13 +66,13 @@ func (self *Server) Pods() http.HandlerFunc {
 			w.WriteHeader(500)
 			fmt.Fprintln(w, err.Error())
 		}
-		marchalled_kubernetes_items, err := json.Marshal(pods.Items)
+		marchalledKubernetesItems, err := json.Marshal(pods.Items)
 		if err != nil {
 			w.WriteHeader(500)
 			fmt.Fprintln(w, err.Error())
 		}
 		w.Header().Add("Content-Type", "application/json")
-		fmt.Fprintln(w, string(marchalled_kubernetes_items))
+		fmt.Fprintln(w, string(marchalledKubernetesItems))
 	}
 }
 
