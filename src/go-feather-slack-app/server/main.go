@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 25.12.2020
+ * Last Modified Date: 26.12.2020
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -101,6 +101,23 @@ func (self *Server) CreateJob() http.HandlerFunc {
 	}
 }
 
+func (self *Server) GetPod() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			sendStatusMethodNotAllowed(w)
+			return
+		}
+
+		var FormValues JobCreationPayload
+		if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
+			log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
+			sendStatusInternalError(w)
+			return
+		}
+
+	}
+}
+
 func New(listenPort int, podManager PodManager.PodManager) *Server {
 	return &Server{port: listenPort, manager: podManager}
 }
@@ -117,6 +134,7 @@ func Listen(manager PodManager.PodManager) {
 	}
 	server := New(appPort, manager)
 	http.HandleFunc("/pods", server.Pods())
+	http.HandleFunc("/pod", server.GetPod())
 	http.HandleFunc("/migrate", server.CreateJob())
 	http.HandleFunc("/healthz", healthz)
 
