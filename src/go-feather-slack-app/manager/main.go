@@ -22,10 +22,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-type PodManager struct {
-	client *kubernetes.Clientset
-}
-
 func New(inCluster bool) *PodManager {
 
 	var config *rest.Config
@@ -67,7 +63,7 @@ func (self *PodManager) GetPod(namespace string, podName string) (*v1.Pod, error
 	return self.client.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 }
 
-func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec batchv1.JobSpec) error {
+func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec batchv1.JobSpec) (*v1.Pod, error) {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: prefixName,
@@ -78,20 +74,14 @@ func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec b
 	job, err := self.client.BatchV1().Jobs(namespace).Create(job)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
-
 	log.Printf("Job %s has been created successfuly", job.GetName())
 	pod, err := self.fetchPodNameFromJobName(namespace, job.GetName())
 	if err != nil {
-		return err
+		return nil, err
 	}
-	logs, err := self.GetPodLogs(namespace, pod.GetName(), false)
-	if err != nil {
-		return err
-	}
-	log.Println("found logs", logs)
-	return nil
+	return pod, nil
 }
 
 func (self *PodManager) fetchPodNameFromJobName(namespace string, jobName string) (*v1.Pod, error) {
@@ -143,8 +133,13 @@ func (self *PodManager) CreateJobSpec(jobNamePrefix string, containerName string
 	return jobSpec
 }
 
-func (self *PodManager) GetPodLogs(namespace string, podName string, async bool) (string, error) {
-	podLogOpts := v1.PodLogOptions{Follow: true}
+func (self *PodManager) GetPodLogs(namespace string, pod *v1.Pod) (string, error) {
+	podLogOpts := v1.PodLogOptions{}
+	podName := pod.GetName()
+	log.Printf("Getting logs from %s in namespace %s", podName, namespace)
+	if err := self.WaitForPodReady(namespace, pod); err != nil {
+		log.Printf("Error while waiting for pod readiness : %s", err.Error())
+	}
 	req := self.client.CoreV1().Pods(namespace).GetLogs(podName, &podLogOpts)
 	reader, err := req.Stream()
 	if err != nil {
@@ -157,6 +152,18 @@ func (self *PodManager) GetPodLogs(namespace string, podName string, async bool)
 		log.Println("POD_READING_FAILURE : ", err.Error())
 		return "", errors.New("An error occured during reading pod logs, watch over server pod logs for more informations")
 	}
-	log.Println("Logs are : ", string(body))
 	return string(body), nil
+}
+
+func (self *PodManager) WaitForPodReady(namespace string, pod *v1.Pod) error {
+	watcher, err := self.client.CoreV1().Pods(namespace).Watch(metav1.SingleObject(metav1.ObjectMeta{Namespace: namespace, Name: pod.GetName()}))
+	if err != nil {
+		return err
+	}
+
+	if err := DefaultHandlerWaitingFunc(watcher, pod); err != nil {
+		return err
+	}
+
+	return nil
 }
