@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 26.12.2020
+ * Last Modified Date: 28.12.2020
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -92,12 +92,20 @@ func (self *Server) CreateJob() http.HandlerFunc {
 		configMapRefs := self.manager.CreateConfigRefSpec(FormValues.ConfigMapsNames)
 		prefixName := FormValues.JobName + "-job"
 		jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, nil, configMapRefs)
-		fmt.Fprintf(w, "Job %s has been created on %s with image : %s", FormValues.JobName, FormValues.Namespace, FormValues.DockerImage)
 
-		if err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec); err != nil {
+		pod, err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec)
+		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "Error during creation of Job : %s", err.Error())
 		}
+		logs, err := self.manager.GetPodLogs(FormValues.Namespace, pod)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "Error during creation of Job : %s", err.Error())
+		}
+
+		fmt.Fprintf(w, "Logs for %s :\n%s", FormValues.JobName, logs)
+		//fmt.Fprintf(w, "Job %s has been created on %s with image : %s", FormValues.JobName, FormValues.Namespace, FormValues.DockerImage)
 	}
 }
 
