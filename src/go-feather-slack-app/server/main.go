@@ -178,6 +178,7 @@ func Listen(manager PodManager.PodManager) {
 	server := New(appPort, manager)
 	http.HandleFunc("/", server.handleSlackCommand())
 	http.HandleFunc("/pods", server.Pods())
+	http.HandleFunc("/pod", server.GetPod())
 	http.HandleFunc("/migrate", server.CreateJob())
 	http.HandleFunc("/healthz", healthz)
 
