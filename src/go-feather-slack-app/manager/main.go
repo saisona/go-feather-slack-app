@@ -2,7 +2,7 @@
 * File              : main.go
 * Author            : Alexandre Saison <alexandre.saison@inarix.com>
 * Date              : 09.12.2020
-* Last Modified Date: 22.12.2020
+* Last Modified Date: 28.12.2020
 * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -45,10 +45,7 @@ func New(inCluster bool) *PodManager {
 	}
 
 	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Panicln(err.Error())
-	}
+	clientset := kubernetes.NewForConfigOrDie(config)
 	return &PodManager{client: clientset}
 }
 
@@ -85,8 +82,6 @@ func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec b
 	}
 
 	log.Printf("Job %s has been created successfuly", job.GetName())
-	log.Println("Job Created Labels -> ", job.Labels)
-	log.Println("Job Created Annotations -> ", job.Annotations)
 	pod, err := self.fetchPodNameFromJobName(namespace, job.GetName())
 	if err != nil {
 		return err
@@ -95,7 +90,7 @@ func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec b
 	if err != nil {
 		return err
 	}
-	log.Println("Logs from getting logs are -> ", logs)
+	log.Println("found logs", logs)
 	return nil
 }
 
