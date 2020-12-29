@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 28.12.2020
+ * Last Modified Date: 29.12.2020
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -105,6 +105,11 @@ func (self *Server) CreateJob() http.HandlerFunc {
 		}
 
 		fmt.Fprintf(w, "Logs for %s :\n%s", FormValues.JobName, logs)
+		if FormValues.CleanUp {
+			log.Printf("Cleaning up %s : ", pod.Labels["job-name"])
+			self.manager.DeleteJob(FormValues.Namespace, pod.Labels["job-name"])
+			self.manager.DeletePod(FormValues.Namespace, pod.GetName())
+		}
 		//fmt.Fprintf(w, "Job %s has been created on %s with image : %s", FormValues.JobName, FormValues.Namespace, FormValues.DockerImage)
 	}
 }
