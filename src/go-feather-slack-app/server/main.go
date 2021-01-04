@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 03.01.2021
+ * Last Modified Date: 04.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -78,6 +79,37 @@ func (self *Server) Pods() http.HandlerFunc {
 	}
 }
 
+func (self *Server) SubmitJobCreation(w http.ResponseWriter, r *http.Request) string {
+	var FormValues JobCreationPayload
+	if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
+		log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
+		sendStatusInternalError(w)
+		return ""
+	}
+	configMapRefs := self.manager.CreateConfigRefSpec(FormValues.ConfigMapsNames)
+	prefixName := FormValues.JobName + "-job"
+	jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, nil, configMapRefs)
+
+	pod, err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error during creation of Job : %s", err.Error())
+	}
+	logs, err := self.manager.GetPodLogs(FormValues.Namespace, pod)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error during creation of Job : %s", err.Error())
+	}
+
+	if FormValues.CleanUp {
+		log.Printf("Cleaning up %s : ", pod.Labels["job-name"])
+		self.manager.DeleteJob(FormValues.Namespace, pod.Labels["job-name"])
+		self.manager.DeletePod(FormValues.Namespace, pod.GetName())
+	}
+	return logs
+
+}
+
 func (self *Server) CreateJob() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
@@ -85,33 +117,6 @@ func (self *Server) CreateJob() http.HandlerFunc {
 			return
 		}
 
-		var FormValues JobCreationPayload
-		if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
-			log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
-			sendStatusInternalError(w)
-			return
-		}
-		configMapRefs := self.manager.CreateConfigRefSpec(FormValues.ConfigMapsNames)
-		prefixName := FormValues.JobName + "-job"
-		jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, nil, configMapRefs)
-
-		pod, err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Error during creation of Job : %s", err.Error())
-		}
-		logs, err := self.manager.GetPodLogs(FormValues.Namespace, pod)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Error during creation of Job : %s", err.Error())
-		}
-
-		fmt.Fprintf(w, "Logs for %s :\n%s", FormValues.JobName, logs)
-		if FormValues.CleanUp {
-			log.Printf("Cleaning up %s : ", pod.Labels["job-name"])
-			self.manager.DeleteJob(FormValues.Namespace, pod.Labels["job-name"])
-			self.manager.DeletePod(FormValues.Namespace, pod.GetName())
-		}
 		//fmt.Fprintf(w, "Job %s has been created on %s with image : %s", FormValues.JobName, FormValues.Namespace, FormValues.DockerImage)
 	}
 }
@@ -142,17 +147,20 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 
 		switch s.Command {
 		case "/echo":
-			params := &slack.Msg{Text: s.Text}
-			b, err := json.Marshal(params)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.Write(b)
+			SendSlackMessage(s.UserName+" typed -> "+s.Text+" on channel "+s.ChannelName, w)
 		case "/migration":
 			params := strings.Split(s.Text, " ")
 			log.Println("action param => ", params)
+			versionRegex, err := regexp.Compile("v[0-9]+\\.[0-9]+\\.[0-9]+")
+			if err != nil {
+				SendSlackMessage(err.Error(), w)
+			}
+			hasVersionSpecified := versionRegex.MatchString(params[0])
+			if !hasVersionSpecified {
+				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+params[0], w)
+			}
+			self.SubmitJobCreation(w, r)
+
 			//var payload string
 			//messageToSend := &slack.Msg{Text: payload}
 			//b, err := json.Marshal(messageToSend)
