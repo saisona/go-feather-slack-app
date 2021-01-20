@@ -37,10 +37,7 @@ func (self *Server) fromSlackTextToStruct(slackTextArguments []string, structHan
 	structHandler.DockerImage = self.DOCKER_IMAGE + slackTextArguments[0]
 	structHandler.Namespace = "default"
 	structHandler.JobName = "go-feather-slack-app-"
-
-	for index, slackTextArguments := range slackTextArguments[1:] {
-		log.Printf("Argument %d -> %s", index, slackTextArguments)
-	}
+	structHandler.ConfigMapsNames = slackTextArguments[1:]
 	return nil
 }
 
@@ -52,8 +49,8 @@ func (self *Server) Pods() http.HandlerFunc {
 		}
 		var FormValues PodsRequestPayload
 		if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
-			log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
-			sendStatusInternalError(w)
+			log.Println("error : ", err.Error())
+			SendSlackMessage("An error occured while unmarchalling your payload : "+err.Error(), w)
 			return
 		}
 
@@ -70,15 +67,6 @@ func (self *Server) Pods() http.HandlerFunc {
 		}
 		w.Header().Add("Content-Type", "application/json")
 		fmt.Fprintln(w, string(marchalledKubernetesItems))
-	}
-}
-
-func (self *Server) CreateJob() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			sendStatusMethodNotAllowed(w)
-			return
-		}
 	}
 }
 
@@ -99,12 +87,10 @@ func (self *Server) GetPod() http.HandlerFunc {
 	}
 }
 
-func (self *Server) SubmitJobCreation(slackTextArguments []string, w http.ResponseWriter, r *http.Request) string {
+func (self *Server) SubmitJobCreation(slackTextArguments []string, w http.ResponseWriter, r *http.Request) {
 	var FormValues JobCreationPayload
 	if err := self.fromSlackTextToStruct(slackTextArguments, &FormValues); err != nil {
-		log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
-		sendStatusInternalError(w)
-		return ""
+		SendSlackMessage("An error occured while unmarchalling your payload : "+err.Error(), w)
 	}
 	configMapRefs := self.manager.CreateConfigRefSpec(FormValues.ConfigMapsNames)
 	prefixName := FormValues.JobName + "-job"
@@ -126,8 +112,8 @@ func (self *Server) SubmitJobCreation(slackTextArguments []string, w http.Respon
 		self.manager.DeleteJob(FormValues.Namespace, pod.Labels["job-name"])
 		self.manager.DeletePod(FormValues.Namespace, pod.GetName())
 	}
-	return logs
 
+	SendSlackMessage(logs, w)
 }
 
 func (self *Server) CreateJob() http.HandlerFunc {
@@ -184,16 +170,6 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
 			}
 			self.SubmitJobCreation(slackTextArguments, w, r)
-
-			//var payload string
-			//messageToSend := &slack.Msg{Text: payload}
-			//b, err := json.Marshal(messageToSend)
-			//if err != nil {
-			//	w.WriteHeader(http.StatusInternalServerError)
-			//	return
-			//}
-			//w.Header().Set("Content-Type", "application/json")
-			//w.Write(b)
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -206,13 +182,14 @@ func New(listenPort int, podManager PodManager.PodManager) *Server {
 	SLACK_API_TOKEN := os.Getenv("SLACK_API_TOKEN")
 	DOCKER_IMAGE := os.Getenv("APP_DOCKER_IMAGE")
 	if SLACK_API_TOKEN == "" || DOCKER_IMAGE == "" {
-		log.Panicln(errors.New("Environment variables DOCKER_IMAGE or SLACK_API_TOKEN are missing").Error())
+		log.Panicln(errors.New("Environment variables APP_DOCKER_IMAGE or SLACK_API_TOKEN are missing").Error())
 	}
 	return &Server{port: listenPort, manager: podManager, SLACK_API_TOKEN: SLACK_API_TOKEN, DOCKER_IMAGE: DOCKER_IMAGE}
 }
 
 func Listen(manager PodManager.PodManager) {
 
+	log.SetFlags(log.Lmsgprefix | log.LstdFlags)
 	appPortStr := os.Getenv("APP_PORT")
 	if appPortStr == "" {
 		log.Panicln(errors.New("Environment variable APP_PORT is missing").Error())
