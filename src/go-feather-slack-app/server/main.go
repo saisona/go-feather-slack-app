@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 04.01.2021
+ * Last Modified Date: 20.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -28,26 +28,20 @@ func healthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func fromBodyToStruct(httpBody io.ReadCloser, structHandler interface{}) error {
-	body, err := ioutil.ReadAll(httpBody)
-	if err != nil {
-		return err
+func (self *Server) fromSlackTextToStruct(slackTextArguments []string, structHandler *JobCreationPayload) error {
+	if len(slackTextArguments) == 0 {
+		return errors.New("No slack argument found !")
+	} else if len(slackTextArguments) < 2 {
+		return errors.New("Not enough slack argument found !")
 	}
+	structHandler.DockerImage = self.DOCKER_IMAGE + slackTextArguments[0]
+	structHandler.Namespace = "default"
+	structHandler.JobName = "go-feather-slack-app-"
 
-	if err := json.Unmarshal(body, &structHandler); err != nil {
-		return err
+	for index, slackTextArguments := range slackTextArguments[1:] {
+		log.Printf("Argument %d -> %s", index, slackTextArguments)
 	}
 	return nil
-}
-
-func sendStatusMethodNotAllowed(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusMethodNotAllowed)
-	w.Write(nil)
-}
-
-func sendStatusInternalError(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusInternalServerError)
-	fmt.Fprintln(w, "An error occured please look at the logs !")
 }
 
 func (self *Server) Pods() http.HandlerFunc {
@@ -79,9 +73,35 @@ func (self *Server) Pods() http.HandlerFunc {
 	}
 }
 
-func (self *Server) SubmitJobCreation(w http.ResponseWriter, r *http.Request) string {
+func (self *Server) CreateJob() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			sendStatusMethodNotAllowed(w)
+			return
+		}
+	}
+}
+
+func (self *Server) GetPod() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			sendStatusMethodNotAllowed(w)
+			return
+		}
+
+		var FormValues JobCreationPayload
+		if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
+			log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
+			sendStatusInternalError(w)
+			return
+		}
+
+	}
+}
+
+func (self *Server) SubmitJobCreation(slackTextArguments []string, w http.ResponseWriter, r *http.Request) string {
 	var FormValues JobCreationPayload
-	if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
+	if err := self.fromSlackTextToStruct(slackTextArguments, &FormValues); err != nil {
 		log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
 		sendStatusInternalError(w)
 		return ""
@@ -108,34 +128,6 @@ func (self *Server) SubmitJobCreation(w http.ResponseWriter, r *http.Request) st
 	}
 	return logs
 
-}
-
-func (self *Server) CreateJob() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			sendStatusMethodNotAllowed(w)
-			return
-		}
-
-		//fmt.Fprintf(w, "Job %s has been created on %s with image : %s", FormValues.JobName, FormValues.Namespace, FormValues.DockerImage)
-	}
-}
-
-func (self *Server) GetPod() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			sendStatusMethodNotAllowed(w)
-			return
-		}
-
-		var FormValues JobCreationPayload
-		if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
-			log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
-			sendStatusInternalError(w)
-			return
-		}
-
-	}
 }
 
 func (self *Server) handleSlackCommand() http.HandlerFunc {
@@ -166,17 +158,21 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 		case "/echo":
 			SendSlackMessage(s.UserName+" typed -> "+s.Text+" on channel "+s.ChannelName, w)
 		case "/migration":
-			params := strings.Split(s.Text, " ")
-			log.Println("action param => ", params)
-			versionRegex, err := regexp.Compile("v[0-9]+\\.[0-9]+\\.[0-9]+")
+			slackTextArguments := strings.Fields(s.Text)
+			err := r.ParseForm()
 			if err != nil {
-				SendSlackMessage(err.Error(), w)
+				log.Println("ERROR IN PARSING FORM")
 			}
-			hasVersionSpecified := versionRegex.MatchString(params[0])
+
+			log.Println("action param => ", slackTextArguments)
+			version := slackTextArguments[0]
+			versionRegex, _ := regexp.Compile("v[0-9]+\\.[0-9]+\\.[0-9]+")
+			hasVersionSpecified := versionRegex.MatchString(version)
+
 			if !hasVersionSpecified {
-				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+params[0], w)
+				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
 			}
-			self.SubmitJobCreation(w, r)
+			self.SubmitJobCreation(slackTextArguments, w, r)
 
 			//var payload string
 			//messageToSend := &slack.Msg{Text: payload}
@@ -197,10 +193,11 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 
 func New(listenPort int, podManager PodManager.PodManager) *Server {
 	SLACK_API_TOKEN := os.Getenv("SLACK_API_TOKEN")
-	if SLACK_API_TOKEN == "" {
-		SLACK_API_TOKEN = "0f87b271e98de06b32f1fe5ec7014c07"
+	DOCKER_IMAGE := os.Getenv("APP_DOCKER_IMAGE")
+	if SLACK_API_TOKEN == "" || DOCKER_IMAGE == "" {
+		log.Panicln(errors.New("Environment variables DOCKER_IMAGE or SLACK_API_TOKEN are missing").Error())
 	}
-	return &Server{port: listenPort, manager: podManager, SLACK_API_TOKEN: SLACK_API_TOKEN}
+	return &Server{port: listenPort, manager: podManager, SLACK_API_TOKEN: SLACK_API_TOKEN, DOCKER_IMAGE: DOCKER_IMAGE}
 }
 
 func Listen(manager PodManager.PodManager) {
@@ -217,7 +214,6 @@ func Listen(manager PodManager.PodManager) {
 	http.HandleFunc("/", server.handleSlackCommand())
 	http.HandleFunc("/pods", server.Pods())
 	http.HandleFunc("/pod", server.GetPod())
-	http.HandleFunc("/migrate", server.CreateJob())
 	http.HandleFunc("/healthz", healthz)
 
 	log.Println("Server started on port " + appPortStr)
