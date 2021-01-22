@@ -25,19 +25,20 @@ GOENV: production
 
 ## Last Stable Release
 
+See [SECURITY.md](SECURITY.md)
 
 ## Usage
 
-## Other Projects
-### Inarix migrations
+Use this go application to be able to launch migration and seeds with a simple slack slach command !
 
-### Inarix seeds
+![Migration Creation GIF]()
 
+![Seed Creation GIF]()
 ### Inarix T.A.R.S
+
+![T.A.R.S Simple response]()
 
 ## Notes
 ## Contributing
 
 See our [CONTRIBUTING.md](CONTRIBUTING.md)
-
-## Pending Features
