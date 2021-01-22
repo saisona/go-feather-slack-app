@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 08.12.2020
- * Last Modified Date: 19.01.2021
+ * Last Modified Date: 22.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package main
@@ -20,7 +20,7 @@ func main() {
 	var inClusterConfig bool
 	if goEnv == "" {
 		panic("GOENV environement is not set !")
-	} else if goEnv != "production" {
+	} else if goEnv != "production" && goEnv != "cluster" {
 		inClusterConfig = false
 	} else {
 		inClusterConfig = true

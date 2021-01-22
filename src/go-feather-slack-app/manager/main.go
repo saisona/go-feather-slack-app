@@ -2,7 +2,7 @@
 * File              : main.go
 * Author            : Alexandre Saison <alexandre.saison@inarix.com>
 * Date              : 09.12.2020
-* Last Modified Date: 20.01.2021
+* Last Modified Date: 22.01.2021
 * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -51,6 +51,17 @@ func (self *PodManager) CreateConfigRefSpec(configMapRefsNames []string) []v1.Co
 		configMapRefs[index] = *tmpConfigMapRef
 	}
 	return configMapRefs
+}
+
+func (self *PodManager) CreateEnvsRefSpec(envMapRefsValues map[string]string) []v1.EnvVar {
+	envMapRefs := make([]v1.EnvVar, len(envMapRefsValues))
+	indexMap := 0
+	for key, value := range envMapRefsValues {
+		tmpEnvVariableRef := &v1.EnvVar{Name: key, Value: value}
+		envMapRefs[indexMap] = *tmpEnvVariableRef
+		indexMap++
+	}
+	return envMapRefs
 }
 
 func (self *PodManager) fetchPodNameFromJobName(namespace string, jobName string) (*v1.Pod, error) {

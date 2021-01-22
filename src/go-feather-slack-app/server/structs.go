@@ -13,10 +13,12 @@ import (
 )
 
 type ServerConfig struct {
-	SLACK_API_TOKEN   string
-	DOCKER_IMAGE      string
-	MIGRATION_COMMAND string
-	SEED_COMMAND      string
+	SLACK_API_TOKEN              string
+	DOCKER_IMAGE                 string
+	MIGRATION_COMMAND            string
+	SEED_COMMAND                 string
+	SEQUELIZE_MIGRATION_ENV_NAME string
+	SEQUELIZE_SEED_ENV_NAME      string
 }
 
 type Server struct {
@@ -26,18 +28,9 @@ type Server struct {
 }
 
 type JobCreationPayload struct {
-	Namespace       string   `json:"namespace"`
-	JobName         string   `json:"jobName"`
-	ConfigMapsNames []string `json:"configMapsNames"`
-	DockerImage     string   `json:"dockerImage"`
-	CleanUp         bool     `json:"cleanup"`
-}
-
-type PodsRequestPayload struct {
-	Namespace string `json:"namespace"`
-}
-
-type PodRequestPayload struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
+	Namespace       string            `json:"namespace"`
+	JobName         string            `json:"jobName"`
+	ConfigMapsNames []string          `json:"configMapsNames"`
+	EnvVariablesMap map[string]string `json:"envVariables"`
+	DockerImage     string            `json:"dockerImage"`
 }
