@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 20.01.2021
+ * Last Modified Date: 22.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	PodManager "github.com/saisona/go-feather-slack-app/src/go-feather-slack-app/manager"
 	"github.com/slack-go/slack"
@@ -34,9 +35,12 @@ func (self *Server) fromSlackTextToStruct(slackTextArguments []string, structHan
 	} else if len(slackTextArguments) < 2 {
 		return errors.New("Not enough slack argument found !")
 	}
-	structHandler.DockerImage = self.DOCKER_IMAGE + slackTextArguments[0]
+
+	dockerTag := slackTextArguments[0]
+
+	structHandler.DockerImage = self.config.DOCKER_IMAGE + ":" + dockerTag
 	structHandler.Namespace = "default"
-	structHandler.JobName = "go-feather-slack-app-"
+	structHandler.JobName = "go-feather-slack-app-" + strconv.Itoa(int(time.Now().Unix()))
 	structHandler.ConfigMapsNames = slackTextArguments[1:]
 	return nil
 }
@@ -87,7 +91,7 @@ func (self *Server) GetPod() http.HandlerFunc {
 	}
 }
 
-func (self *Server) SubmitJobCreation(slackTextArguments []string, w http.ResponseWriter, r *http.Request) {
+func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []string, w http.ResponseWriter, r *http.Request) {
 	var FormValues JobCreationPayload
 	if err := self.fromSlackTextToStruct(slackTextArguments, &FormValues); err != nil {
 		SendSlackMessage("An error occured while unmarchalling your payload : "+err.Error(), w)
@@ -96,23 +100,25 @@ func (self *Server) SubmitJobCreation(slackTextArguments []string, w http.Respon
 	prefixName := FormValues.JobName + "-job"
 	jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, nil, configMapRefs)
 
+	log.Println("Creating ", FormValues.JobName)
 	pod, err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec)
+
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Error during creation of Job : %s", err.Error())
-	}
-	logs, err := self.manager.GetPodLogs(FormValues.Namespace, pod)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Error during creation of Job : %s", err.Error())
+		log.Printf("Error during creation of Job: %s", err.Error())
+		SendSlackMessage("Error during creation of Job: "+err.Error(), w)
+		return
 	}
 
-	if FormValues.CleanUp {
-		log.Printf("Cleaning up %s : ", pod.Labels["job-name"])
-		self.manager.DeleteJob(FormValues.Namespace, pod.Labels["job-name"])
-		self.manager.DeletePod(FormValues.Namespace, pod.GetName())
-	}
+	SendSlackMessage("Successfully created "+pod.Name, w)
+}
 
+func (self *Server) FetchJobPodLogs(podNamespace string, podName string, w http.ResponseWriter) {
+	logs, err := self.manager.GetPodLogs(podNamespace, podName)
+	if err != nil {
+		log.Printf("Error when fetching Job logs: %s", err.Error())
+		SendSlackMessage("Error when fetching Job logs: "+err.Error(), w)
+		return
+	}
 	SendSlackMessage(logs, w)
 }
 
@@ -122,7 +128,7 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 			sendStatusMethodNotAllowed(w)
 			return
 		}
-		verifier, err := slack.NewSecretsVerifier(r.Header, self.SLACK_API_TOKEN)
+		verifier, err := slack.NewSecretsVerifier(r.Header, self.config.SLACK_API_TOKEN)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -139,28 +145,62 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		log.Printf("Config is : {MIGRATION_COMMAND: %s, SEED_COMMAND: %s}", self.config.MIGRATION_COMMAND, self.config.SEED_COMMAND)
 
 		switch s.Command {
 		case "/echo":
 			SendSlackMessage(s.UserName+" typed -> "+s.Text+" on channel "+s.ChannelName, w)
-		case "/migration":
+		case self.config.SEED_COMMAND:
 			slackTextArguments := strings.Fields(s.Text)
 			err := r.ParseForm()
 			if err != nil {
-				log.Println("ERROR IN PARSING FORM")
+				SendSlackMessage("Error : "+err.Error(), w)
+				log.Println("[ERROR] " + err.Error())
+				return
 			}
 
-			log.Println("action param => ", slackTextArguments)
+			if len(slackTextArguments) < 2 {
+				SendSlackMessage("You must at least specify a version and a seed name !", w)
+				return
+			}
+
 			version := slackTextArguments[0]
 			versionRegex, _ := regexp.Compile("v[0-9]+\\.[0-9]+\\.[0-9]+")
 			hasVersionSpecified := versionRegex.MatchString(version)
 
 			if !hasVersionSpecified {
 				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
+				return
 			}
-			self.SubmitJobCreation(slackTextArguments, w, r)
+
+			self.SubmitJobCreation(s.Command, slackTextArguments, w, r)
+			return
+		case self.config.MIGRATION_COMMAND:
+			slackTextArguments := strings.Fields(s.Text)
+			err := r.ParseForm()
+			if err != nil {
+				SendSlackMessage("Error : "+err.Error(), w)
+				log.Println("[ERROR] " + err.Error())
+				return
+			}
+
+			if len(slackTextArguments) < 1 {
+				SendSlackMessage("You must at least specify a version !", w)
+				return
+			}
+
+			version := slackTextArguments[0]
+			versionRegex, _ := regexp.Compile("v[0-9]+\\.[0-9]+\\.[0-9]+")
+			hasVersionSpecified := versionRegex.MatchString(version)
+
+			if !hasVersionSpecified {
+				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
+				return
+			}
+			self.SubmitJobCreation(s.Command, slackTextArguments, w, r)
+			return
 		default:
-			w.WriteHeader(http.StatusInternalServerError)
+			SendSlackMessage("Current slack command is not implemented yet !", w)
 			return
 		}
 
@@ -168,12 +208,8 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 }
 
 func New(listenPort int, podManager PodManager.PodManager) *Server {
-	SLACK_API_TOKEN := os.Getenv("SLACK_API_TOKEN")
-	DOCKER_IMAGE := os.Getenv("APP_DOCKER_IMAGE")
-	if SLACK_API_TOKEN == "" || DOCKER_IMAGE == "" {
-		log.Panicln(errors.New("Environment variables APP_DOCKER_IMAGE or SLACK_API_TOKEN are missing").Error())
-	}
-	return &Server{port: listenPort, manager: podManager, SLACK_API_TOKEN: SLACK_API_TOKEN, DOCKER_IMAGE: DOCKER_IMAGE}
+	appConfig := initConfig()
+	return &Server{port: listenPort, manager: podManager, config: *appConfig}
 }
 
 func Listen(manager PodManager.PodManager) {
@@ -189,8 +225,6 @@ func Listen(manager PodManager.PodManager) {
 	}
 	server := New(appPort, manager)
 	http.HandleFunc("/", server.handleSlackCommand())
-	http.HandleFunc("/pods", server.Pods())
-	http.HandleFunc("/pod", server.GetPod())
 	http.HandleFunc("/healthz", healthz)
 
 	log.Println("Server started on port " + appPortStr)
