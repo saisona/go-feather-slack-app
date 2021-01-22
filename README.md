@@ -15,11 +15,15 @@ Create a [Slack App](https://api.slack.com/apps) with slach commands and copy yo
 SLACK_API_TOKEN=#Your slack application "Signing Secret"
 APP_DOCKER_IMAGE=#Your docker image which run the FeatherJs/Sequelize migration
 APP_PORT=3030 #Application containerPort (might be used for K8s deployment)
+APP_DOCKER_IMAGE: 894517829775.dkr.ecr.eu-west-1.amazonaws.com/inarix-api
+APP_MIGRATION_COMMAND: #Used command to trigger migration creation
+APP_SEED_COMMAND: #Used command to trigger seed creation
+APP_SEQUELIZE_MIGRATION_ENV_NAME: #Name of the environment key which will have the selected migration name
+APP_SEQUELIZE_SEED_ENV_NAME: #Name of the environment key which will have the selected migration name
+GOENV: production
 ```
 
 ## Last Stable Release
-
-## Latest Development Changes
 
 
 ## Usage
