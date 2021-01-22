@@ -2,7 +2,7 @@
 * File              : main.go
 * Author            : Alexandre Saison <alexandre.saison@inarix.com>
 * Date              : 09.12.2020
-* Last Modified Date: 19.01.2021
+* Last Modified Date: 20.01.2021
 * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -46,7 +46,7 @@ func New(inCluster bool) *PodManager {
 func (self *PodManager) CreateConfigRefSpec(configMapRefsNames []string) []v1.ConfigMapEnvSource {
 	configMapRefs := make([]v1.ConfigMapEnvSource, len(configMapRefsNames))
 	for index, configMapName := range configMapRefsNames {
-		isOptionnal := false
+		isOptionnal := true
 		tmpConfigMapRef := &v1.ConfigMapEnvSource{LocalObjectReference: v1.LocalObjectReference{Name: configMapName}, Optional: &isOptionnal}
 		configMapRefs[index] = *tmpConfigMapRef
 	}

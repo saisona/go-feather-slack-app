@@ -2,7 +2,7 @@
  * File              : pod.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 29.12.2020
- * Last Modified Date: 29.12.2020
+ * Last Modified Date: 22.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -31,17 +31,22 @@ func (self *PodManager) GetPod(namespace string, podName string) (*v1.Pod, error
 	return self.client.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 }
 
-func (self *PodManager) GetPodLogs(namespace string, pod *v1.Pod) (string, error) {
+func (self *PodManager) GetPodLogs(namespace string, podName string) (string, error) {
 	podLogOpts := v1.PodLogOptions{}
-	podName := pod.GetName()
 	log.Printf("Getting logs from %s in namespace %s", podName, namespace)
+	pod, err := self.GetPod(namespace, podName)
+
+	if err != nil {
+		return "", err
+	}
+
 	if err := self.WaitForPodReady(namespace, pod); err != nil {
 		log.Printf("Error while waiting for pod readiness : %s", err.Error())
 	}
 	req := self.client.CoreV1().Pods(namespace).GetLogs(podName, &podLogOpts)
 	reader, err := req.Stream()
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 	defer reader.Close()
 	body, err := ioutil.ReadAll(reader)

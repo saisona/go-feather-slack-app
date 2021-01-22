@@ -2,7 +2,7 @@
  * File              : structs.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 21.12.2020
- * Last Modified Date: 20.01.2021
+ * Last Modified Date: 22.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 
@@ -12,11 +12,17 @@ import (
 	PodManager "github.com/saisona/go-feather-slack-app/src/go-feather-slack-app/manager"
 )
 
+type ServerConfig struct {
+	SLACK_API_TOKEN   string
+	DOCKER_IMAGE      string
+	MIGRATION_COMMAND string
+	SEED_COMMAND      string
+}
+
 type Server struct {
-	port            int
-	manager         PodManager.PodManager
-	SLACK_API_TOKEN string
-	DOCKER_IMAGE    string
+	port    int
+	manager PodManager.PodManager
+	config  ServerConfig
 }
 
 type JobCreationPayload struct {

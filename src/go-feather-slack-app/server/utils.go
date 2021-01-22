@@ -2,18 +2,20 @@
  * File              : utils.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 04.01.2021
- * Last Modified Date: 20.01.2021
+ * Last Modified Date: 22.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/slack-go/slack"
 )
@@ -50,4 +52,34 @@ func SendSlackMessage(message string, w http.ResponseWriter) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
+
+}
+
+func initConfig() *ServerConfig {
+
+	SLACK_API_TOKEN := os.Getenv("SLACK_API_TOKEN")
+	DOCKER_IMAGE := os.Getenv("APP_DOCKER_IMAGE")
+	MIGRATION_COMMAND := os.Getenv("APP_MIGRATION_COMMAND")
+	SEED_COMMAND := os.Getenv("APP_SEED_COMMAND")
+
+	if SLACK_API_TOKEN == "" || DOCKER_IMAGE == "" {
+		log.Panicln(errors.New("Environment variables APP_DOCKER_IMAGE or SLACK_API_TOKEN are missing").Error())
+	}
+
+	if MIGRATION_COMMAND == "" {
+		log.Println("WARNING: You didn't specified any APP_MIGRATION_COMMAND, default /migration will be used")
+		MIGRATION_COMMAND = "/migration"
+	}
+
+	if SEED_COMMAND == "" {
+		log.Println("WARNING: You didn't specified any APP_SEED_COMMAND, default /seed will be used")
+		MIGRATION_COMMAND = "/seed"
+	}
+
+	return &ServerConfig{
+		SLACK_API_TOKEN:   SLACK_API_TOKEN,
+		DOCKER_IMAGE:      DOCKER_IMAGE,
+		MIGRATION_COMMAND: MIGRATION_COMMAND,
+		SEED_COMMAND:      SEED_COMMAND,
+	}
 }
