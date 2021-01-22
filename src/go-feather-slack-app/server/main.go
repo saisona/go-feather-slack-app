@@ -8,9 +8,7 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -29,76 +27,39 @@ func healthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (self *Server) fromSlackTextToStruct(slackTextArguments []string, structHandler *JobCreationPayload) error {
-	if len(slackTextArguments) == 0 {
-		return errors.New("No slack argument found !")
-	} else if len(slackTextArguments) < 2 {
-		return errors.New("Not enough slack argument found !")
-	}
-
+func (self *Server) fromSlackTextToStruct(commandName string, slackTextArguments []string, structHandler *JobCreationPayload) error {
 	dockerTag := slackTextArguments[0]
 
 	structHandler.DockerImage = self.config.DOCKER_IMAGE + ":" + dockerTag
 	structHandler.Namespace = "default"
 	structHandler.JobName = "go-feather-slack-app-" + strconv.Itoa(int(time.Now().Unix()))
-	structHandler.ConfigMapsNames = slackTextArguments[1:]
+	structHandler.EnvVariablesMap = make(map[string]string)
+	log.Printf("#FromSlackTextToStruct SlackArguments (%d elements) -> %+v", len(slackTextArguments), slackTextArguments)
+
+	if commandName == self.config.MIGRATION_COMMAND {
+		structHandler.EnvVariablesMap[self.config.SEQUELIZE_MIGRATION_ENV_NAME] = slackTextArguments[1]
+		structHandler.ConfigMapsNames = slackTextArguments[2:]
+	} else if commandName == self.config.SEED_COMMAND {
+		structHandler.EnvVariablesMap[self.config.SEQUELIZE_SEED_ENV_NAME] = slackTextArguments[1]
+		structHandler.ConfigMapsNames = slackTextArguments[2:]
+	} else {
+		return errors.New("Neither migration nor seed command has been provided")
+	}
+
+	log.Println("JobCreationPayload -> ", structHandler)
 	return nil
-}
-
-func (self *Server) Pods() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			sendStatusMethodNotAllowed(w)
-			return
-		}
-		var FormValues PodsRequestPayload
-		if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
-			log.Println("error : ", err.Error())
-			SendSlackMessage("An error occured while unmarchalling your payload : "+err.Error(), w)
-			return
-		}
-
-		log.Printf("Selected namespace for pod introspection is %s", FormValues.Namespace)
-		pods, err := self.manager.GetPods(FormValues.Namespace)
-		if err != nil {
-			w.WriteHeader(500)
-			fmt.Fprintln(w, err.Error())
-		}
-		marchalledKubernetesItems, err := json.Marshal(pods.Items)
-		if err != nil {
-			w.WriteHeader(500)
-			fmt.Fprintln(w, err.Error())
-		}
-		w.Header().Add("Content-Type", "application/json")
-		fmt.Fprintln(w, string(marchalledKubernetesItems))
-	}
-}
-
-func (self *Server) GetPod() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			sendStatusMethodNotAllowed(w)
-			return
-		}
-
-		var FormValues JobCreationPayload
-		if err := fromBodyToStruct(r.Body, &FormValues); err != nil {
-			log.Printf("An error occured while unmarchalling your payload : %s", err.Error())
-			sendStatusInternalError(w)
-			return
-		}
-
-	}
 }
 
 func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []string, w http.ResponseWriter, r *http.Request) {
 	var FormValues JobCreationPayload
-	if err := self.fromSlackTextToStruct(slackTextArguments, &FormValues); err != nil {
+	if err := self.fromSlackTextToStruct(commandName, slackTextArguments, &FormValues); err != nil {
 		SendSlackMessage("An error occured while unmarchalling your payload : "+err.Error(), w)
 	}
+	log.Printf("#SubmitJobCreation SlackArguments (%d elements) -> %+v", len(slackTextArguments), slackTextArguments)
 	configMapRefs := self.manager.CreateConfigRefSpec(FormValues.ConfigMapsNames)
+	envMapRefs := self.manager.CreateEnvsRefSpec(FormValues.EnvVariablesMap)
 	prefixName := FormValues.JobName + "-job"
-	jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, nil, configMapRefs)
+	jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, envMapRefs, configMapRefs)
 
 	log.Println("Creating ", FormValues.JobName)
 	pod, err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec)
@@ -156,11 +117,8 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		log.Printf("Config is : {MIGRATION_COMMAND: %s, SEED_COMMAND: %s}", self.config.MIGRATION_COMMAND, self.config.SEED_COMMAND)
 
 		switch s.Command {
-		case "/echo":
-			SendSlackMessage(s.UserName+" typed -> "+s.Text+" on channel "+s.ChannelName, w)
 		case self.config.SEED_COMMAND:
 			slackTextArguments := strings.Fields(s.Text)
 			err := r.ParseForm()
@@ -195,8 +153,8 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 				return
 			}
 
-			if len(slackTextArguments) < 1 {
-				SendSlackMessage("You must at least specify a version !", w)
+			if len(slackTextArguments) < 2 {
+				SendSlackMessage("You must at least specify a version and a migration name!", w)
 				return
 			}
 
