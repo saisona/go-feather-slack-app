@@ -1,7 +1,5 @@
 FROM golang:1.15-alpine AS build_base
 
-RUN apk add --no-cache git
-
 # Set the Current Working Directory inside the container
 WORKDIR /tmp/go-feather-slack-app
 
@@ -9,9 +7,11 @@ WORKDIR /tmp/go-feather-slack-app
 COPY go.mod .
 COPY go.sum .
 
-RUN go mod download
+COPY main.go /tmp/go-feather-slack-app/main.go
+COPY src /tmp/go-feather-slack-app/src
 
-COPY . .
+RUN go mod download
+RUN go mod vendor
 
 # Unit tests
 RUN CGO_ENABLED=0 go test -v

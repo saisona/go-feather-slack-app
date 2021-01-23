@@ -84,11 +84,6 @@ func (self *Server) FetchJobPodLogs(podNamespace string, podName string, w http.
 }
 
 func (self *Server) handleSlackCommand() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			sendStatusMethodNotAllowed(w)
-			return
-		}
 		verifier, err := slack.NewSecretsVerifier(r.Header, self.config.SLACK_API_TOKEN)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
