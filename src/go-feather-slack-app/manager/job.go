@@ -2,13 +2,14 @@
  * File              : job.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 29.12.2020
- * Last Modified Date: 22.01.2021
+ * Last Modified Date: 23.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
 
 import (
 	"log"
+	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -67,6 +68,7 @@ func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec b
 		Spec: jobSpec,
 	}
 	job, err := self.client.BatchV1().Jobs(namespace).Create(job)
+	time.Sleep(250 * time.Millisecond)
 
 	if err != nil {
 		return nil, err
