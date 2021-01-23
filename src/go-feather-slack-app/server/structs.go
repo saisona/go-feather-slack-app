@@ -2,7 +2,7 @@
  * File              : structs.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 21.12.2020
- * Last Modified Date: 22.01.2021
+ * Last Modified Date: 23.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 
@@ -33,4 +33,10 @@ type JobCreationPayload struct {
 	ConfigMapsNames []string          `json:"configMapsNames"`
 	EnvVariablesMap map[string]string `json:"envVariables"`
 	DockerImage     string            `json:"dockerImage"`
+}
+
+type SlackApiEventPayload struct {
+	Token     string `json:"token"`
+	Challenge string `json:"challenge"`
+	Type      string `json:"type"`
 }

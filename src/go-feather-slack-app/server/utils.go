@@ -2,7 +2,7 @@
  * File              : utils.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 04.01.2021
- * Last Modified Date: 22.01.2021
+ * Last Modified Date: 23.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -14,6 +14,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 
@@ -53,6 +54,17 @@ func SendSlackMessage(message string, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
 
+}
+
+func generateDefaultAnswerMention() string {
+	possibleAnswers := make([]string, 5)
+	possibleAnswers = append(possibleAnswers, "Hello there !")
+	possibleAnswers = append(possibleAnswers, "What can I do for you!")
+	possibleAnswers = append(possibleAnswers, "Work work work everyday, everyday the same work!")
+	possibleAnswers = append(possibleAnswers, "Oh I hope this time it'll work!")
+	possibleAnswers = append(possibleAnswers, "When can I'll take a break?")
+	indexAnswer := rand.Intn(5)
+	return possibleAnswers[indexAnswer]
 }
 
 func initConfig() *ServerConfig {

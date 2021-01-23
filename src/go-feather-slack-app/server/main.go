@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 22.01.2021
+ * Last Modified Date: 23.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -183,6 +183,7 @@ func Listen(manager PodManager.PodManager) {
 	}
 	server := New(appPort, manager)
 	http.HandleFunc("/", server.handleSlackCommand())
+	http.HandleFunc("/events", server.handleSlackEvent())
 	http.HandleFunc("/healthz", healthz)
 
 	log.Println("Server started on port " + appPortStr)
