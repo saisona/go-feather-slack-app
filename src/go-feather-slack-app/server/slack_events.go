@@ -2,7 +2,7 @@
  * File              : slack_events.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 23.01.2021
- * Last Modified Date: 23.01.2021
+ * Last Modified Date: 24.01.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -47,11 +47,21 @@ func handleSlackChallenge(apiEventType string, body []byte, w http.ResponseWrite
 	}
 	log.Printf("Payload => %+v", payload)
 	if payload.Type == "url_verification" || apiEventType == slackevents.URLVerification {
-		log.Printf("#handleSlackChallenge enter URLVerification")
-		var response *slackevents.ChallengeResponse
-		response.Challenge = payload.Challenge
-		w.Header().Set("Content-Type", "text")
-		w.Write([]byte(response.Challenge))
+		log.Printf("#handleSlackChallenge enter URLVerification Challenge : %s", payload.Challenge)
+		challengeResponse := &slackevents.ChallengeResponse{Challenge: payload.Challenge}
+
+		bytes, err := json.Marshal(challengeResponse)
+		if err != nil {
+			log.Println("Error when Marshall => ", err.Error())
+			sendStatusInternalError(w)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		sent, err := w.Write(bytes)
+		if err != nil {
+			log.Println("Error when sending response=> ", err.Error())
+			sendStatusInternalError(w)
+		}
+		log.Printf("Sent %d bytes !", sent)
 		return
 	}
 }
