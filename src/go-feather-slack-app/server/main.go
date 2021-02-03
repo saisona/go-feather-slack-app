@@ -71,16 +71,23 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 	}
 
 	SendSlackMessage("Successfully created "+pod.Name, w)
+	log.Println("Job has been created now sending state and logs when finished")
+	self.FetchJobPodLogs(FormValues.Namespace, pod.Name, nil)
 }
 
 func (self *Server) FetchJobPodLogs(podNamespace string, podName string, w http.ResponseWriter) {
 	logs, err := self.manager.GetPodLogs(podNamespace, podName)
-	if err != nil {
-		log.Printf("Error when fetching Job logs: %s", err.Error())
-		SendSlackMessage("Error when fetching Job logs: "+err.Error(), w)
-		return
+	if w == nil {
+		log.Printf("Sending back logs to slack channel")
+		log.Printf("Logs are %s", logs)
+	} else {
+		if err != nil {
+			log.Printf("Error when fetching Job logs: %s", err.Error())
+			SendSlackMessage("Error when fetching Job logs: "+err.Error(), w)
+			return
+		}
+		SendSlackMessage(logs, w)
 	}
-	SendSlackMessage(logs, w)
 }
 
 func (self *Server) handleSlackCommand() http.HandlerFunc {

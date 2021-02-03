@@ -31,7 +31,6 @@ func (self *Server) initApiEventStruct(body []byte, r *http.Request) (slackevent
 }
 
 func handleSlackChallenge(apiEventType string, body []byte, w http.ResponseWriter, r *http.Request) {
-	log.Printf("#handleSlackChallenge apiEventType=%s body=%s", apiEventType, string(body))
 	var payload SlackApiEventPayload
 
 	err := json.Unmarshal(body, &payload)
@@ -40,10 +39,7 @@ func handleSlackChallenge(apiEventType string, body []byte, w http.ResponseWrite
 
 	}
 
-	log.Printf("Payload => %+v", payload)
-
 	if payload.Type == "url_verification" || apiEventType == slackevents.URLVerification {
-		log.Printf("#handleSlackChallenge enter URLVerification Challenge : %s", payload.Challenge)
 		challengeResponse := &slackevents.ChallengeResponse{Challenge: payload.Challenge}
 
 		bytes, err := json.Marshal(challengeResponse)
@@ -53,31 +49,24 @@ func handleSlackChallenge(apiEventType string, body []byte, w http.ResponseWrite
 			sendStatusInternalError(w)
 		}
 
-		log.Println("Marchalled challenge = ", bytes)
-
 		w.Header().Set("Content-Type", "application/json")
-		sent, err := w.Write(bytes)
 
-		if err != nil {
+		if _, err := w.Write(bytes); err != nil {
 			log.Println("Error when sending response=> ", err.Error())
 			sendStatusInternalError(w)
 		}
-		log.Printf("Sent %d bytes !", sent)
 		return
 	}
 }
 
 func (self *Server) handleSlackEvent() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		api := slack.New(self.config.SLACK_API_TOKEN)
-		log.Printf("#handleSlackEvent begin function")
 
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			sendStatusInternalError(w)
 		}
 
-		log.Printf("#handleSlackEvent apiEvents creation")
 		apiEvents, err := self.initApiEventStruct(body, r)
 
 		if err != nil {
@@ -86,16 +75,24 @@ func (self *Server) handleSlackEvent() http.HandlerFunc {
 			return
 		}
 
-		log.Printf("#handleSlackEvent apiEvents created => %+v", apiEvents)
 		handleSlackChallenge(apiEvents.Type, body, w, r)
 
 		if apiEvents.Type == slackevents.CallbackEvent {
-			log.Println("Entered in CALLBACKEVENT !!! YEAAAH !!")
-			innerEvent := apiEvents.InnerEvent
-			switch ev := innerEvent.Data.(type) {
+			api := slack.New(self.config.SLACK_API_TOKEN)
+
+			switch ev := apiEvents.InnerEvent.Data.(type) {
 			case *slackevents.AppMentionEvent:
-				api.PostMessage(ev.Channel, slack.MsgOptionText(generateDefaultAnswerMention(), false))
+				log.Println("Found the mention")
+				textMessage := generateDefaultAnswerMention()
+				log.Printf("message was supposed to be %s", textMessage)
+				something, someelse, err := api.PostMessage(ev.Channel, slack.MsgOptionText("You sent me "+ev.Text, false))
+				if err != nil {
+					log.Printf("Error when posting message on slack something=%s someelse=%s and err=%s", something, someelse, err.Error())
+				}
+			default:
+				log.Printf("Enter default = %+v", ev)
 			}
+
 		}
 	}
 }

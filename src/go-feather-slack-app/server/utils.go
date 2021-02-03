@@ -57,13 +57,9 @@ func SendSlackMessage(message string, w http.ResponseWriter) {
 }
 
 func generateDefaultAnswerMention() string {
-	possibleAnswers := make([]string, 5)
-	possibleAnswers = append(possibleAnswers, "Hello there !")
-	possibleAnswers = append(possibleAnswers, "What can I do for you!")
-	possibleAnswers = append(possibleAnswers, "Work work work everyday, everyday the same work!")
-	possibleAnswers = append(possibleAnswers, "Oh I hope this time it'll work!")
-	possibleAnswers = append(possibleAnswers, "When can I'll take a break?")
+	possibleAnswers := []string{"Hello there !", "What can I do for you!", "Work work work everyday, everyday the same work!", "Oh I hope this time it'll work!", "When can I'll take a break?"}
 	indexAnswer := rand.Intn(5)
+	log.Printf("index is %d so return value is %s", indexAnswer, possibleAnswers[indexAnswer])
 	return possibleAnswers[indexAnswer]
 }
 
