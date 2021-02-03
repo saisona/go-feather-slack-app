@@ -2,7 +2,7 @@
  * File              : utils.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 04.01.2021
- * Last Modified Date: 23.01.2021
+ * Last Modified Date: 03.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -70,14 +70,15 @@ func generateDefaultAnswerMention() string {
 func initConfig() *ServerConfig {
 
 	SLACK_API_TOKEN := os.Getenv("SLACK_API_TOKEN")
+	SLACK_SIGNING_SECRET := os.Getenv("SLACK_SIGNING_SECRET")
 	DOCKER_IMAGE := os.Getenv("APP_DOCKER_IMAGE")
 	MIGRATION_COMMAND := os.Getenv("APP_MIGRATION_COMMAND")
 	SEED_COMMAND := os.Getenv("APP_SEED_COMMAND")
 	SEQUELIZE_MIGRATION_ENV_NAME := os.Getenv("APP_SEQUELIZE_MIGRATION_ENV_NAME")
 	SEQUELIZE_SEED_ENV_NAME := os.Getenv("APP_SEQUELIZE_SEED_ENV_NAME")
 
-	if SLACK_API_TOKEN == "" || DOCKER_IMAGE == "" || SEQUELIZE_MIGRATION_ENV_NAME == "" || SEQUELIZE_SEED_ENV_NAME == "" {
-		log.Panicln(errors.New("One of [APP_DOCKER_IMAGE, SLACK_API_TOKEN, APP_SEQUELIZE_SEED_ENV_NAME, APP_SEQUELIZE_MIGRATION_ENV_NAME] environment variables is missing").Error())
+	if SLACK_API_TOKEN == "" || DOCKER_IMAGE == "" || SEQUELIZE_MIGRATION_ENV_NAME == "" || SEQUELIZE_SEED_ENV_NAME == "" || SLACK_SIGNING_SECRET == "" {
+		log.Panicln(errors.New("One of [APP_DOCKER_IMAGE, SLACK_API_TOKEN, APP_SEQUELIZE_SEED_ENV_NAME, APP_SEQUELIZE_MIGRATION_ENV_NAME, SLACK_SIGNING_SECRET] environment variables is missing").Error())
 	}
 
 	if MIGRATION_COMMAND == "" {
@@ -92,6 +93,7 @@ func initConfig() *ServerConfig {
 
 	return &ServerConfig{
 		SLACK_API_TOKEN:              SLACK_API_TOKEN,
+		SLACK_SIGNING_SECRET:         SLACK_SIGNING_SECRET,
 		DOCKER_IMAGE:                 DOCKER_IMAGE,
 		MIGRATION_COMMAND:            MIGRATION_COMMAND,
 		SEED_COMMAND:                 SEED_COMMAND,

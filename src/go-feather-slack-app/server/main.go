@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 23.01.2021
+ * Last Modified Date: 03.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -52,16 +52,16 @@ func (self *Server) fromSlackTextToStruct(commandName string, slackTextArguments
 
 func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []string, w http.ResponseWriter, r *http.Request) {
 	var FormValues JobCreationPayload
+
 	if err := self.fromSlackTextToStruct(commandName, slackTextArguments, &FormValues); err != nil {
 		SendSlackMessage("An error occured while unmarchalling your payload : "+err.Error(), w)
 	}
+
 	log.Printf("#SubmitJobCreation SlackArguments (%d elements) -> %+v", len(slackTextArguments), slackTextArguments)
 	configMapRefs := self.manager.CreateConfigRefSpec(FormValues.ConfigMapsNames)
 	envMapRefs := self.manager.CreateEnvsRefSpec(FormValues.EnvVariablesMap)
 	prefixName := FormValues.JobName + "-job"
 	jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, envMapRefs, configMapRefs)
-
-	log.Println("Creating ", FormValues.JobName)
 	pod, err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec)
 
 	if err != nil {
@@ -94,12 +94,12 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 		r.Body = ioutil.NopCloser(io.TeeReader(r.Body, &verifier))
 		s, err := slack.SlashCommandParse(r)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			sendStatusInternalError(w)
 			return
 		}
 
 		if err = verifier.Ensure(); err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
+			sendStatusInternalError(w)
 			return
 		}
 

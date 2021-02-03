@@ -2,7 +2,7 @@
  * File              : slack_events.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 23.01.2021
- * Last Modified Date: 24.01.2021
+ * Last Modified Date: 03.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -19,17 +19,11 @@ import (
 
 func (self *Server) initApiEventStruct(body []byte, r *http.Request) (slackevents.EventsAPIEvent, error) {
 
-	verifier, err := slack.NewSecretsVerifier(r.Header, self.config.SLACK_API_TOKEN)
-	if err != nil {
-		return slackevents.EventsAPIEvent{}, err
-	}
+	verifier := slackevents.TokenComparator{VerificationToken: self.config.SLACK_SIGNING_SECRET}
+	apiEvents, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionVerifyToken(verifier))
 
-	if err := verifier.Ensure(); err != nil {
-		return slackevents.EventsAPIEvent{}, err
-	}
-
-	apiEvents, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionNoVerifyToken())
 	if err != nil {
+		log.Println("Error while creation of ParsedEvent with body", err.Error())
 		return slackevents.EventsAPIEvent{}, err
 	}
 
@@ -45,18 +39,25 @@ func handleSlackChallenge(apiEventType string, body []byte, w http.ResponseWrite
 		log.Println("ERROR => ", err.Error())
 
 	}
+
 	log.Printf("Payload => %+v", payload)
+
 	if payload.Type == "url_verification" || apiEventType == slackevents.URLVerification {
 		log.Printf("#handleSlackChallenge enter URLVerification Challenge : %s", payload.Challenge)
 		challengeResponse := &slackevents.ChallengeResponse{Challenge: payload.Challenge}
 
 		bytes, err := json.Marshal(challengeResponse)
+
 		if err != nil {
 			log.Println("Error when Marshall => ", err.Error())
 			sendStatusInternalError(w)
 		}
+
+		log.Println("Marchalled challenge = ", bytes)
+
 		w.Header().Set("Content-Type", "application/json")
 		sent, err := w.Write(bytes)
+
 		if err != nil {
 			log.Println("Error when sending response=> ", err.Error())
 			sendStatusInternalError(w)
@@ -80,8 +81,11 @@ func (self *Server) handleSlackEvent() http.HandlerFunc {
 		apiEvents, err := self.initApiEventStruct(body, r)
 
 		if err != nil {
+			log.Printf("Error when init ApiEvent = %s", err.Error())
 			sendStatusInternalError(w)
+			return
 		}
+
 		log.Printf("#handleSlackEvent apiEvents created => %+v", apiEvents)
 		handleSlackChallenge(apiEvents.Type, body, w, r)
 

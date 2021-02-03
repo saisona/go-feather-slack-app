@@ -2,7 +2,7 @@
  * File              : structs.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 21.12.2020
- * Last Modified Date: 23.01.2021
+ * Last Modified Date: 03.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 
@@ -12,8 +12,10 @@ import (
 	PodManager "github.com/saisona/go-feather-slack-app/src/go-feather-slack-app/manager"
 )
 
+//ServerConfig is the basic server required configuration
 type ServerConfig struct {
 	SLACK_API_TOKEN              string
+	SLACK_SIGNING_SECRET         string
 	DOCKER_IMAGE                 string
 	MIGRATION_COMMAND            string
 	SEED_COMMAND                 string
