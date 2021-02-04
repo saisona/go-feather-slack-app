@@ -2,7 +2,7 @@
  * File              : slack_events.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 23.01.2021
- * Last Modified Date: 03.02.2021
+ * Last Modified Date: 04.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -84,8 +84,7 @@ func (self *Server) handleSlackEvent() http.HandlerFunc {
 			case *slackevents.AppMentionEvent:
 				log.Println("Found the mention")
 				textMessage := generateDefaultAnswerMention()
-				log.Printf("message was supposed to be %s", textMessage)
-				something, someelse, err := api.PostMessage(ev.Channel, slack.MsgOptionText("You sent me "+ev.Text, false))
+				something, someelse, err := api.PostMessage(ev.Channel, slack.MsgOptionText(textMessage, false))
 				if err != nil {
 					log.Printf("Error when posting message on slack something=%s someelse=%s and err=%s", something, someelse, err.Error())
 				}
