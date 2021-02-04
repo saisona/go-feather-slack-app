@@ -10,14 +10,10 @@ COPY go.sum .
 COPY main.go /tmp/go-feather-slack-app/main.go
 COPY src /tmp/go-feather-slack-app/src
 
-RUN go mod download
-RUN go mod vendor
-
-# Unit tests
-RUN CGO_ENABLED=0 go test -v
-
-# Build the Go app
-RUN go build -o ./out/app .
+RUN go mod download && \ 
+    go mod vendor && \ 
+    CGO_ENABLED=0 go test -v &&\
+    go build -o ./out/app .
 
 # Start fresh from a smaller image
 FROM alpine:3.9 
