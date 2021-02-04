@@ -2,7 +2,7 @@
  * File              : job.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 29.12.2020
- * Last Modified Date: 23.01.2021
+ * Last Modified Date: 04.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -33,8 +33,9 @@ func (self *PodManager) CreateJobSpec(jobNamePrefix string, containerName string
 			Spec: v1.PodSpec{
 				Containers: []v1.Container{
 					{
-						Name:  containerName,
-						Image: containerImage,
+						Name:            containerName,
+						Image:           containerImage,
+						ImagePullPolicy: v1.PullAlways,
 					},
 				},
 				RestartPolicy: v1.RestartPolicyNever,
