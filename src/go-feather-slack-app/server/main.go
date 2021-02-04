@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 03.02.2021
+ * Last Modified Date: 04.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -63,6 +63,7 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 	prefixName := FormValues.JobName + "-job"
 	jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, envMapRefs, configMapRefs)
 	pod, err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec)
+	self.slackClient.PostMessage(self.config.SLACK_ANSWER_CHANNEL_ID, slack.MsgOptionText("Creation of job "+jobSpec.Template.GetName(), false))
 
 	if err != nil {
 		log.Printf("Error during creation of Job: %s", err.Error())
@@ -70,8 +71,8 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 		return
 	}
 
-	SendSlackMessage("Successfully created "+pod.Name, w)
-	log.Println("Job has been created now sending state and logs when finished")
+	self.sendSlackMessageWithClient("Job has been created now sending state and logs when finished")
+	self.sendSlackMessageWithClient("Image :" + FormValues.DockerImage)
 	self.FetchJobPodLogs(FormValues.Namespace, pod.Name, nil)
 }
 
@@ -79,7 +80,7 @@ func (self *Server) FetchJobPodLogs(podNamespace string, podName string, w http.
 	logs, err := self.manager.GetPodLogs(podNamespace, podName)
 	if w == nil {
 		log.Printf("Sending back logs to slack channel")
-		log.Printf("Logs are %s", logs)
+		self.sendSlackMessageWithClient(logs)
 	} else {
 		if err != nil {
 			log.Printf("Error when fetching Job logs: %s", err.Error())
@@ -92,8 +93,9 @@ func (self *Server) FetchJobPodLogs(podNamespace string, podName string, w http.
 
 func (self *Server) handleSlackCommand() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		verifier, err := slack.NewSecretsVerifier(r.Header, self.config.SLACK_API_TOKEN)
+		verifier, err := slack.NewSecretsVerifier(r.Header, self.config.SLACK_SIGNING_SECRET)
 		if err != nil {
+			log.Println("Error creating NewSecretVerifier: ", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -101,11 +103,7 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 		r.Body = ioutil.NopCloser(io.TeeReader(r.Body, &verifier))
 		s, err := slack.SlashCommandParse(r)
 		if err != nil {
-			sendStatusInternalError(w)
-			return
-		}
-
-		if err = verifier.Ensure(); err != nil {
+			log.Println("Error parsing SlachCommandParse: ", err.Error())
 			sendStatusInternalError(w)
 			return
 		}
@@ -133,7 +131,7 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
 				return
 			}
-
+			SendSlackMessage("Creation of Job with version "+version, w)
 			self.SubmitJobCreation(s.Command, slackTextArguments, w, r)
 			return
 		case self.config.MIGRATION_COMMAND:
@@ -170,7 +168,8 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 
 func New(listenPort int, podManager PodManager.PodManager) *Server {
 	appConfig := initConfig()
-	return &Server{port: listenPort, manager: podManager, config: *appConfig}
+	slackClient := slack.New(appConfig.SLACK_API_TOKEN)
+	return &Server{port: listenPort, manager: podManager, config: *appConfig, slackClient: *slackClient}
 }
 
 func Listen(manager PodManager.PodManager) {

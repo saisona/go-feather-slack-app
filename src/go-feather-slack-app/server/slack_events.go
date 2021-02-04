@@ -78,16 +78,16 @@ func (self *Server) handleSlackEvent() http.HandlerFunc {
 		handleSlackChallenge(apiEvents.Type, body, w, r)
 
 		if apiEvents.Type == slackevents.CallbackEvent {
-			api := slack.New(self.config.SLACK_API_TOKEN)
 
 			switch ev := apiEvents.InnerEvent.Data.(type) {
 			case *slackevents.AppMentionEvent:
 				log.Println("Found the mention")
 				textMessage := generateDefaultAnswerMention()
-				something, someelse, err := api.PostMessage(ev.Channel, slack.MsgOptionText(textMessage, false))
+				something, someelse, err := self.slackClient.PostMessage(ev.Channel, slack.MsgOptionText(textMessage, false))
 				if err != nil {
 					log.Printf("Error when posting message on slack something=%s someelse=%s and err=%s", something, someelse, err.Error())
 				}
+				log.Println("something=" + something + " someelse=" + someelse)
 			default:
 				log.Printf("Enter default = %+v", ev)
 			}

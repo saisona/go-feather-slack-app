@@ -2,7 +2,7 @@
  * File              : utils.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 04.01.2021
- * Last Modified Date: 03.02.2021
+ * Last Modified Date: 04.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -46,20 +46,31 @@ func fromBodyToStruct(httpBody io.ReadCloser, structHandler interface{}) error {
 func SendSlackMessage(message string, w http.ResponseWriter) {
 	params := &slack.Msg{Text: message}
 	b, err := json.Marshal(params)
+
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Printf("ERROR : %s", err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(b)
 
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(b); err != nil {
+		log.Printf("Error during sending slack message = %s", err.Error())
+		return
+	}
+	return
+}
+
+func (self *Server) sendSlackMessageWithClient(message string) error {
+	if _, _, err := self.slackClient.PostMessage(self.config.SLACK_ANSWER_CHANNEL_ID, slack.MsgOptionText(message, false)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func generateDefaultAnswerMention() string {
 	possibleAnswers := []string{"Hello there !", "What can I do for you!", "Work work work everyday, everyday the same work!", "Oh I hope this time it'll work!", "When can I'll take a break?"}
 	indexAnswer := rand.Intn(5)
-	log.Printf("index is %d so return value is %s", indexAnswer, possibleAnswers[indexAnswer])
 	return possibleAnswers[indexAnswer]
 }
 
@@ -67,14 +78,16 @@ func initConfig() *ServerConfig {
 
 	SLACK_API_TOKEN := os.Getenv("SLACK_API_TOKEN")
 	SLACK_SIGNING_SECRET := os.Getenv("SLACK_SIGNING_SECRET")
+	SLACK_ANSWER_CHANNEL_ID := os.Getenv("SLACK_ANSWER_CHANNEL_ID")
+
 	DOCKER_IMAGE := os.Getenv("APP_DOCKER_IMAGE")
 	MIGRATION_COMMAND := os.Getenv("APP_MIGRATION_COMMAND")
 	SEED_COMMAND := os.Getenv("APP_SEED_COMMAND")
 	SEQUELIZE_MIGRATION_ENV_NAME := os.Getenv("APP_SEQUELIZE_MIGRATION_ENV_NAME")
 	SEQUELIZE_SEED_ENV_NAME := os.Getenv("APP_SEQUELIZE_SEED_ENV_NAME")
 
-	if SLACK_API_TOKEN == "" || DOCKER_IMAGE == "" || SEQUELIZE_MIGRATION_ENV_NAME == "" || SEQUELIZE_SEED_ENV_NAME == "" || SLACK_SIGNING_SECRET == "" {
-		log.Panicln(errors.New("One of [APP_DOCKER_IMAGE, SLACK_API_TOKEN, APP_SEQUELIZE_SEED_ENV_NAME, APP_SEQUELIZE_MIGRATION_ENV_NAME, SLACK_SIGNING_SECRET] environment variables is missing").Error())
+	if SLACK_API_TOKEN == "" || DOCKER_IMAGE == "" || SEQUELIZE_MIGRATION_ENV_NAME == "" || SEQUELIZE_SEED_ENV_NAME == "" || SLACK_SIGNING_SECRET == "" || SLACK_ANSWER_CHANNEL_ID == "" {
+		log.Panicln(errors.New("One of [APP_DOCKER_IMAGE, SLACK_API_TOKEN, APP_SEQUELIZE_SEED_ENV_NAME, APP_SEQUELIZE_MIGRATION_ENV_NAME, SLACK_SIGNING_SECRET, SLACK_ANSWER_CHANNEL_ID] environment variables is missing").Error())
 	}
 
 	if MIGRATION_COMMAND == "" {
@@ -90,6 +103,7 @@ func initConfig() *ServerConfig {
 	return &ServerConfig{
 		SLACK_API_TOKEN:              SLACK_API_TOKEN,
 		SLACK_SIGNING_SECRET:         SLACK_SIGNING_SECRET,
+		SLACK_ANSWER_CHANNEL_ID:      SLACK_ANSWER_CHANNEL_ID,
 		DOCKER_IMAGE:                 DOCKER_IMAGE,
 		MIGRATION_COMMAND:            MIGRATION_COMMAND,
 		SEED_COMMAND:                 SEED_COMMAND,
