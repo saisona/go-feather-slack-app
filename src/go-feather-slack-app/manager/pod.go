@@ -2,7 +2,7 @@
  * File              : pod.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 29.12.2020
- * Last Modified Date: 22.01.2021
+ * Last Modified Date: 04.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -42,12 +42,16 @@ func (self *PodManager) GetPodLogs(namespace string, podName string) (string, er
 
 	if err := self.WaitForPodReady(namespace, pod); err != nil {
 		log.Printf("Error while waiting for pod readiness : %s", err.Error())
+		return "", err
 	}
+
 	req := self.client.CoreV1().Pods(namespace).GetLogs(podName, &podLogOpts)
 	reader, err := req.Stream()
+
 	if err != nil {
 		return "", err
 	}
+
 	defer reader.Close()
 	body, err := ioutil.ReadAll(reader)
 
@@ -55,6 +59,8 @@ func (self *PodManager) GetPodLogs(namespace string, podName string) (string, er
 		log.Println("POD_READING_FAILURE : ", err.Error())
 		return "", errors.New("An error occured during reading pod logs, watch over server pod logs for more informations")
 	}
+
+	//TODO: handle podStatus to be able to determine if migration/seed failed
 	return string(body), nil
 }
 

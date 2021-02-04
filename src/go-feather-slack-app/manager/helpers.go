@@ -2,7 +2,7 @@
  * File              : helpers.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 28.12.2020
- * Last Modified Date: 28.12.2020
+ * Last Modified Date: 04.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -30,7 +30,7 @@ func DefaultHandlerWaitingFunc(watcher watch.Interface, pod *v1.Pod) error {
 		}
 		log.Printf("Pod %s is in state %s", p.GetName(), string(p.Status.Phase))
 		phase := string(p.Status.Phase)
-		if phase == "Succeeded" || phase == "Error" {
+		if phase == "Succeeded" || phase == "Failed" {
 			watcher.Stop()
 		}
 	}

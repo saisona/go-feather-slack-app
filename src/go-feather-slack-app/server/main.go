@@ -63,7 +63,7 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 	prefixName := FormValues.JobName + "-job"
 	jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, envMapRefs, configMapRefs)
 	pod, err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec)
-	self.slackClient.PostMessage(self.config.SLACK_ANSWER_CHANNEL_ID, slack.MsgOptionText("Creation of job "+jobSpec.Template.GetName(), false))
+	self.sendSlackMessageWithClient("Creation of job " + pod.GetName())
 
 	if err != nil {
 		log.Printf("Error during creation of Job: %s", err.Error())
@@ -71,24 +71,25 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 		return
 	}
 
-	self.sendSlackMessageWithClient("Job has been created now sending state and logs when finished")
+	self.sendSlackMessageWithClient("Job has been created, I'll send logs when finished")
 	self.sendSlackMessageWithClient("Image :" + FormValues.DockerImage)
-	self.FetchJobPodLogs(FormValues.Namespace, pod.Name, nil)
+	self.FetchJobPodLogs(FormValues.Namespace, pod.Name)
 }
 
-func (self *Server) FetchJobPodLogs(podNamespace string, podName string, w http.ResponseWriter) {
+func (self *Server) FetchJobPodLogs(podNamespace string, podName string) {
 	logs, err := self.manager.GetPodLogs(podNamespace, podName)
-	if w == nil {
-		log.Printf("Sending back logs to slack channel")
+
+	log.Printf("res err:%s logs:%s", err.Error(), logs)
+	if err != nil && logs != "" {
+		self.sendSlackMessageWithClient(err.Error())
 		self.sendSlackMessageWithClient(logs)
-	} else {
-		if err != nil {
-			log.Printf("Error when fetching Job logs: %s", err.Error())
-			SendSlackMessage("Error when fetching Job logs: "+err.Error(), w)
-			return
-		}
-		SendSlackMessage(logs, w)
+		return
+	} else if err != nil {
+		self.sendSlackMessageWithClient(err.Error())
+		return
 	}
+	log.Printf("Sending back logs to slack channel")
+	self.sendSlackMessageWithClient(logs)
 }
 
 func (self *Server) handleSlackCommand() http.HandlerFunc {
@@ -131,9 +132,9 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
 				return
 			}
-			SendSlackMessage("Creation of Job with version "+version, w)
+
+			defer SendSlackMessage("Creation of Job with version "+version, w)
 			self.SubmitJobCreation(s.Command, slackTextArguments, w, r)
-			return
 		case self.config.MIGRATION_COMMAND:
 			slackTextArguments := strings.Fields(s.Text)
 			err := r.ParseForm()
