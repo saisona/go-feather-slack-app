@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 04.02.2021
+ * Last Modified Date: 05.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -34,7 +34,6 @@ func (self *Server) fromSlackTextToStruct(commandName string, slackTextArguments
 	structHandler.Namespace = "default"
 	structHandler.JobName = "go-feather-slack-app-" + strconv.Itoa(int(time.Now().Unix()))
 	structHandler.EnvVariablesMap = make(map[string]string)
-	log.Printf("#FromSlackTextToStruct SlackArguments (%d elements) -> %+v", len(slackTextArguments), slackTextArguments)
 
 	if commandName == self.config.MIGRATION_COMMAND {
 		structHandler.EnvVariablesMap[self.config.SEQUELIZE_MIGRATION_ENV_NAME] = slackTextArguments[1]
@@ -46,7 +45,6 @@ func (self *Server) fromSlackTextToStruct(commandName string, slackTextArguments
 		return errors.New("Neither migration nor seed command has been provided")
 	}
 
-	log.Println("JobCreationPayload -> ", structHandler)
 	return nil
 }
 
@@ -57,7 +55,6 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 		SendSlackMessage("An error occured while unmarchalling your payload : "+err.Error(), w)
 	}
 
-	log.Printf("#SubmitJobCreation SlackArguments (%d elements) -> %+v", len(slackTextArguments), slackTextArguments)
 	configMapRefs := self.manager.CreateConfigRefSpec(FormValues.ConfigMapsNames)
 	envMapRefs := self.manager.CreateEnvsRefSpec(FormValues.EnvVariablesMap)
 	prefixName := FormValues.JobName + "-job"
@@ -73,7 +70,9 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 
 	self.sendSlackMessageWithClient("Job has been created, I'll send logs when finished")
 	self.sendSlackMessageWithClient("Image :" + FormValues.DockerImage)
-	self.FetchJobPodLogs(FormValues.Namespace, pod.Name)
+	defer self.FetchJobPodLogs(FormValues.Namespace, pod.Name)
+	return SendSlackMessage("Job has been created")
+
 }
 
 func (self *Server) FetchJobPodLogs(podNamespace string, podName string) {
