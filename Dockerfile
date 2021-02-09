@@ -10,25 +10,17 @@ COPY go.sum .
 COPY main.go /tmp/go-feather-slack-app/main.go
 COPY src /tmp/go-feather-slack-app/src
 
-RUN go mod download
-RUN go mod vendor
-
-
-# Unit tests
-RUN CGO_ENABLED=0 go test -v
-
-# Build the Go app
-RUN go build -o ./out/app .
+RUN go mod download && \ 
+    go mod vendor && \ 
+    go build -o ./out/app .
 
 # Start fresh from a smaller image
-FROM alpine:3.9 
+FROM alpine:3.13.1
+
 RUN apk add ca-certificates
 
 COPY --from=build_base /tmp/go-feather-slack-app/out/app /app/app
 
-# This container exposes port 8080 to the outside world
-EXPOSE 8080
-
 # Run the binary program produced by `go install`
-CMD ["/app/app"]
+ENTRYPOINT ["/app/app"]
 

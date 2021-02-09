@@ -2,7 +2,7 @@
  * File              : job.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 29.12.2020
- * Last Modified Date: 23.01.2021
+ * Last Modified Date: 04.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -25,7 +25,11 @@ func (self *PodManager) DeleteJob(namespace string, jobName string) error {
 }
 
 func (self *PodManager) CreateJobSpec(jobNamePrefix string, containerName string, containerImage string, envs []v1.EnvVar, configMapRefs []v1.ConfigMapEnvSource) *batchv1.JobSpec {
+	backOffLimit := int32(0)              //This is set to forbid 5 other pod to be created (default value: 6).
+	TTLSecondsAfterFinished := int32(120) // Set to let Job being automatically cleaned up.
 	jobSpec := &batchv1.JobSpec{
+		BackoffLimit:            &backOffLimit,
+		TTLSecondsAfterFinished: &TTLSecondsAfterFinished,
 		Template: v1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: jobNamePrefix,
@@ -33,8 +37,9 @@ func (self *PodManager) CreateJobSpec(jobNamePrefix string, containerName string
 			Spec: v1.PodSpec{
 				Containers: []v1.Container{
 					{
-						Name:  containerName,
-						Image: containerImage,
+						Name:            containerName,
+						Image:           containerImage,
+						ImagePullPolicy: v1.PullAlways,
 					},
 				},
 				RestartPolicy: v1.RestartPolicyNever,
@@ -68,7 +73,7 @@ func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec b
 		Spec: jobSpec,
 	}
 	job, err := self.client.BatchV1().Jobs(namespace).Create(job)
-	time.Sleep(250 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 
 	if err != nil {
 		return nil, err

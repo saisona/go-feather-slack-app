@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 22.01.2021
+ * Last Modified Date: 09.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -34,7 +34,6 @@ func (self *Server) fromSlackTextToStruct(commandName string, slackTextArguments
 	structHandler.Namespace = "default"
 	structHandler.JobName = "go-feather-slack-app-" + strconv.Itoa(int(time.Now().Unix()))
 	structHandler.EnvVariablesMap = make(map[string]string)
-	log.Printf("#FromSlackTextToStruct SlackArguments (%d elements) -> %+v", len(slackTextArguments), slackTextArguments)
 
 	if commandName == self.config.MIGRATION_COMMAND {
 		structHandler.EnvVariablesMap[self.config.SEQUELIZE_MIGRATION_ENV_NAME] = slackTextArguments[1]
@@ -46,23 +45,22 @@ func (self *Server) fromSlackTextToStruct(commandName string, slackTextArguments
 		return errors.New("Neither migration nor seed command has been provided")
 	}
 
-	log.Println("JobCreationPayload -> ", structHandler)
 	return nil
 }
 
 func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []string, w http.ResponseWriter, r *http.Request) {
 	var FormValues JobCreationPayload
+
 	if err := self.fromSlackTextToStruct(commandName, slackTextArguments, &FormValues); err != nil {
 		SendSlackMessage("An error occured while unmarchalling your payload : "+err.Error(), w)
 	}
-	log.Printf("#SubmitJobCreation SlackArguments (%d elements) -> %+v", len(slackTextArguments), slackTextArguments)
+
 	configMapRefs := self.manager.CreateConfigRefSpec(FormValues.ConfigMapsNames)
 	envMapRefs := self.manager.CreateEnvsRefSpec(FormValues.EnvVariablesMap)
 	prefixName := FormValues.JobName + "-job"
 	jobSpec := self.manager.CreateJobSpec("go-feather-slack-app-job", prefixName, FormValues.DockerImage, envMapRefs, configMapRefs)
-
-	log.Println("Creating ", FormValues.JobName)
 	pod, err := self.manager.CreateJob(FormValues.Namespace, prefixName, *jobSpec)
+	threadTs, err := self.sendSlackMessageWithClient("Creation of job "+pod.Name, "")
 
 	if err != nil {
 		log.Printf("Error during creation of Job: %s", err.Error())
@@ -70,38 +68,33 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 		return
 	}
 
-	SendSlackMessage("Successfully created "+pod.Name, w)
+	self.sendSlackMessageWithClient("Job has been created, I'll send logs when finished", threadTs)
+	self.sendSlackMessageWithClient("Image :"+FormValues.DockerImage, threadTs)
+	self.FetchJobPodLogs(FormValues.Namespace, pod.Name, threadTs)
+	SendSlackMessage("Job has been created", w)
 }
 
-func (self *Server) FetchJobPodLogs(podNamespace string, podName string, w http.ResponseWriter) {
+func (self *Server) FetchJobPodLogs(podNamespace string, podName string, threadTs string) {
 	logs, err := self.manager.GetPodLogs(podNamespace, podName)
-	if err != nil {
-		log.Printf("Error when fetching Job logs: %s", err.Error())
-		SendSlackMessage("Error when fetching Job logs: "+err.Error(), w)
+
+	log.Printf("res err:%s logs:%s", err.Error(), logs)
+	if err != nil && logs != "" {
+		self.sendSlackMessageWithClient(err.Error(), "")
+		self.sendSlackMessageWithClient(logs, "")
+		return
+	} else if err != nil {
+		self.sendSlackMessageWithClient(err.Error(), "")
 		return
 	}
-	SendSlackMessage(logs, w)
-}
-
-func (self *Server) CreateJob() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			sendStatusMethodNotAllowed(w)
-			return
-		}
-
-		//fmt.Fprintf(w, "Job %s has been created on %s with image : %s", FormValues.JobName, FormValues.Namespace, FormValues.DockerImage)
-	}
+	log.Printf("Sending back logs to slack channel")
+	self.sendSlackMessageWithClient(logs, threadTs)
 }
 
 func (self *Server) handleSlackCommand() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			sendStatusMethodNotAllowed(w)
-			return
-		}
-		verifier, err := slack.NewSecretsVerifier(r.Header, self.config.SLACK_API_TOKEN)
+		verifier, err := slack.NewSecretsVerifier(r.Header, self.config.SLACK_SIGNING_SECRET)
 		if err != nil {
+			log.Println("Error creating NewSecretVerifier: ", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -109,12 +102,8 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 		r.Body = ioutil.NopCloser(io.TeeReader(r.Body, &verifier))
 		s, err := slack.SlashCommandParse(r)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if err = verifier.Ensure(); err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
+			log.Println("Error parsing SlachCommandParse: ", err.Error())
+			sendStatusInternalError(w)
 			return
 		}
 
@@ -143,7 +132,6 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 			}
 
 			self.SubmitJobCreation(s.Command, slackTextArguments, w, r)
-			return
 		case self.config.MIGRATION_COMMAND:
 			slackTextArguments := strings.Fields(s.Text)
 			err := r.ParseForm()
@@ -166,6 +154,7 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
 				return
 			}
+
 			self.SubmitJobCreation(s.Command, slackTextArguments, w, r)
 			return
 		default:
@@ -178,7 +167,8 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 
 func New(listenPort int, podManager PodManager.PodManager) *Server {
 	appConfig := initConfig()
-	return &Server{port: listenPort, manager: podManager, config: *appConfig}
+	slackClient := slack.New(appConfig.SLACK_API_TOKEN)
+	return &Server{port: listenPort, manager: podManager, config: *appConfig, slackClient: *slackClient}
 }
 
 func Listen(manager PodManager.PodManager) {
@@ -194,6 +184,7 @@ func Listen(manager PodManager.PodManager) {
 	}
 	server := New(appPort, manager)
 	http.HandleFunc("/", server.handleSlackCommand())
+	http.HandleFunc("/events", server.handleSlackEvent())
 	http.HandleFunc("/healthz", healthz)
 
 	log.Println("Server started on port " + appPortStr)
