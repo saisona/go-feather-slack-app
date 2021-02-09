@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 05.02.2021
+ * Last Modified Date: 09.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -71,8 +71,7 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 	self.sendSlackMessageWithClient("Job has been created, I'll send logs when finished")
 	self.sendSlackMessageWithClient("Image :" + FormValues.DockerImage)
 	defer self.FetchJobPodLogs(FormValues.Namespace, pod.Name)
-	return SendSlackMessage("Job has been created")
-
+	SendSlackMessage("Job has been created", w)
 }
 
 func (self *Server) FetchJobPodLogs(podNamespace string, podName string) {
