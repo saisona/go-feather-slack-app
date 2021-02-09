@@ -2,7 +2,7 @@
  * File              : utils.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 04.01.2021
- * Last Modified Date: 04.02.2021
+ * Last Modified Date: 09.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -31,6 +31,10 @@ func sendStatusInternalError(w http.ResponseWriter) {
 	fmt.Fprintln(w, "An error occured please look at the logs !")
 }
 
+//Allow fetch http request Body to a know specified structure
+//@args httpBody: The http.Request.Body in a http.HandlerFunc
+//@args structHandler: The wanted structure to hold the data.
+//@returns: error if any occurs, nil otherwise.
 func fromBodyToStruct(httpBody io.ReadCloser, structHandler interface{}) error {
 	body, err := ioutil.ReadAll(httpBody)
 	if err != nil {
@@ -43,6 +47,10 @@ func fromBodyToStruct(httpBody io.ReadCloser, structHandler interface{}) error {
 	return nil
 }
 
+//Send Slack message as an API endpoint response.
+//@used: with slach commands
+//@args message: is the message to send
+//@args w: is the http.ResponseWriter to use to send the message
 func SendSlackMessage(message string, w http.ResponseWriter) {
 	params := &slack.Msg{Text: message}
 	b, err := json.Marshal(params)
@@ -61,11 +69,28 @@ func SendSlackMessage(message string, w http.ResponseWriter) {
 	return
 }
 
-func (self *Server) sendSlackMessageWithClient(message string) error {
-	if _, _, err := self.slackClient.PostMessage(self.config.SLACK_ANSWER_CHANNEL_ID, slack.MsgOptionText(message, false)); err != nil {
-		return err
+// Send Slack message using the API call
+//@used: used to send async message
+//@args message:, is the message to send
+//@args threadTs:, is the message to send
+//@returns: (string, error) where string is the thread_ts.
+func (self *Server) sendSlackMessageWithClient(message string, threadTs string) (string, error) {
+	var Options slack.MsgOption
+
+	OptionMessage := slack.MsgOptionText(message, false)
+
+	if threadTs != "" {
+		OptionTs := slack.MsgOptionTS(threadTs)
+		Options = slack.MsgOptionCompose(OptionTs, OptionMessage)
+	} else {
+		Options = slack.MsgOptionCompose(OptionMessage)
 	}
-	return nil
+
+	_, thread_ts, err := self.slackClient.PostMessage(self.config.SLACK_ANSWER_CHANNEL_ID, Options)
+	if err != nil {
+		return "", err
+	}
+	return thread_ts, nil
 }
 
 func generateDefaultAnswerMention() string {

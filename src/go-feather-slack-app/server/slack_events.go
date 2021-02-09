@@ -2,7 +2,7 @@
  * File              : slack_events.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 23.01.2021
- * Last Modified Date: 04.02.2021
+ * Last Modified Date: 09.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -13,7 +13,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
 
@@ -79,15 +78,15 @@ func (self *Server) handleSlackEvent() http.HandlerFunc {
 
 		if apiEvents.Type == slackevents.CallbackEvent {
 
-			switch ev := apiEvents.InnerEvent.Data.(type) {
+			InnerEventData := apiEvents.InnerEvent.Data
+			switch ev := InnerEventData.(type) {
 			case *slackevents.AppMentionEvent:
 				log.Println("Found the mention")
 				textMessage := generateDefaultAnswerMention()
-				something, someelse, err := self.slackClient.PostMessage(ev.Channel, slack.MsgOptionText(textMessage, false))
+				threadTs, err := self.sendSlackMessageWithClient(textMessage, "")
 				if err != nil {
-					log.Printf("Error when posting message on slack something=%s someelse=%s and err=%s", something, someelse, err.Error())
+					log.Printf("Error when posting message on slack thread_ts=%s and err=%s", threadTs, err.Error())
 				}
-				log.Println("something=" + something + " someelse=" + someelse)
 			default:
 				log.Printf("Enter default = %+v", ev)
 			}
