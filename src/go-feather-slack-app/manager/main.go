@@ -2,26 +2,23 @@
 * File              : main.go
 * Author            : Alexandre Saison <alexandre.saison@inarix.com>
 * Date              : 09.12.2020
-* Last Modified Date: 17.12.2020
+* Last Modified Date: 22.01.2021
 * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"os"
 
-	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-type PodManager struct {
-	client *kubernetes.Clientset
-}
 
 func New(inCluster bool) *PodManager {
 
@@ -32,7 +29,6 @@ func New(inCluster bool) *PodManager {
 		config, err = rest.InClusterConfig()
 		if err != nil {
 			panic(err.Error())
-			return nil
 		}
 	} else {
 		config, err = clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
@@ -43,55 +39,41 @@ func New(inCluster bool) *PodManager {
 	}
 
 	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Panicln(err.Error())
-	}
+	clientset := kubernetes.NewForConfigOrDie(config)
 	return &PodManager{client: clientset}
 }
 
-func (self *PodManager) GetPods(namespace string) (*v1.PodList, error) {
-	return self.client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
-}
-
-func (self *PodManager) GetPod(namespace string, podName string) (*v1.Pod, error) {
-	return self.client.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
-}
-
-func (self *PodManager) CreateJob(namespace string, prefixName string, jobSpec batchv1.JobSpec) (bool, error) {
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: prefixName,
-			Namespace:    namespace,
-		},
-		Spec: jobSpec,
+func (self *PodManager) CreateConfigRefSpec(configMapRefsNames []string) []v1.ConfigMapEnvSource {
+	configMapRefs := make([]v1.ConfigMapEnvSource, len(configMapRefsNames))
+	for index, configMapName := range configMapRefsNames {
+		isOptionnal := true
+		tmpConfigMapRef := &v1.ConfigMapEnvSource{LocalObjectReference: v1.LocalObjectReference{Name: configMapName}, Optional: &isOptionnal}
+		configMapRefs[index] = *tmpConfigMapRef
 	}
-	job, err := self.client.BatchV1().Jobs(namespace).Create(job)
+	return configMapRefs
+}
 
+func (self *PodManager) CreateEnvsRefSpec(envMapRefsValues map[string]string) []v1.EnvVar {
+	envMapRefs := make([]v1.EnvVar, len(envMapRefsValues))
+	indexMap := 0
+	for key, value := range envMapRefsValues {
+		tmpEnvVariableRef := &v1.EnvVar{Name: key, Value: value}
+		envMapRefs[indexMap] = *tmpEnvVariableRef
+		indexMap++
+	}
+	return envMapRefs
+}
+
+func (self *PodManager) fetchPodNameFromJobName(namespace string, jobName string) (*v1.Pod, error) {
+	labelSelector := "job-name=" + jobName
+	pods, err := self.client.CoreV1().Pods(namespace).List(metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	log.Printf("Job %s has been created successfuly", job.GetName())
-	return true, nil
-}
-
-func (self *PodManager) CreateJobSpecWithEnvVariable(jobNamePrefix string, containerName string, containerImage string, envs []v1.EnvVar) *batchv1.JobSpec {
-	return &batchv1.JobSpec{
-		Template: v1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: jobNamePrefix,
-			},
-			Spec: v1.PodSpec{
-				Containers: []v1.Container{
-					{
-						Name:  containerName,
-						Image: containerImage,
-						Env:   envs,
-					},
-				},
-
-				RestartPolicy: v1.RestartPolicyNever,
-			},
-		},
+	if len(pods.Items) == 1 {
+		return &pods.Items[0], nil
 	}
+
+	errorMessage := fmt.Sprintf("No pod found with job-name=%s on namespace %s", jobName, namespace)
+	return nil, errors.New(errorMessage)
 }
