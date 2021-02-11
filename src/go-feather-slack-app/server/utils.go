@@ -2,7 +2,7 @@
  * File              : utils.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 04.01.2021
- * Last Modified Date: 09.02.2021
+ * Last Modified Date: 11.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server

@@ -2,7 +2,7 @@
  * File              : helpers.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 28.12.2020
- * Last Modified Date: 04.02.2021
+ * Last Modified Date: 11.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -23,6 +23,7 @@ type PodManager struct {
 type HandlerWaitingFunc func(watcher watch.Interface, pod *v1.Pod) error
 
 func DefaultHandlerWaitingFunc(watcher watch.Interface, pod *v1.Pod) error {
+
 	for event := range watcher.ResultChan() {
 		p, ok := event.Object.(*v1.Pod)
 		if !ok {
