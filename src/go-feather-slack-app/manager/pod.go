@@ -48,7 +48,8 @@ func (self *PodManager) GetPodLogs(namespace string, podName string) (string, st
 		return "", "", err
 	}
 
-	if err := self.WaitForPodReady(namespace, pod); err != nil {
+	podPhase, err := self.WaitForPodReady(namespace, pod)
+	if err != nil {
 		log.Printf("Error while waiting for pod readiness : %s", err.Error())
 		return "", "", err
 	}
@@ -68,18 +69,19 @@ func (self *PodManager) GetPodLogs(namespace string, podName string) (string, st
 		return "", pod.Status.Reason, errors.New("An error occured during reading pod logs, watch over server pod logs for more informations")
 	}
 
-	return string(body), string(pod.Status.Phase), nil
+	return string(body), podPhase, nil
 }
 
-func (self *PodManager) WaitForPodReady(namespace string, pod *v1.Pod) error {
+func (self *PodManager) WaitForPodReady(namespace string, pod *v1.Pod) (string, error) {
 	watcher, err := self.client.CoreV1().Pods(namespace).Watch(metav1.SingleObject(metav1.ObjectMeta{Namespace: namespace, Name: pod.GetName()}))
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	if err := DefaultHandlerWaitingFunc(watcher, pod); err != nil {
-		return err
+	podPhase, err := DefaultHandlerWaitingFunc(watcher, pod)
+	if err != nil {
+		return "", err
 	}
 
-	return nil
+	return podPhase, nil
 }

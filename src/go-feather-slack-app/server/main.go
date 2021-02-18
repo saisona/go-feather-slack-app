@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -75,7 +74,6 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 }
 
 func (self *Server) FetchJobPodLogs(podNamespace string, podName string, threadTs string) {
-	log.Printf("[BEFORE] GetPodLogs podNamespace=%s podName=%s", podNamespace, podName)
 	logs, podStatus, err := self.manager.GetPodLogs(podNamespace, podName)
 	log.Printf("podStatus = %s", podStatus)
 
@@ -122,10 +120,7 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 			}
 
 			version := slackTextArguments[0]
-			versionRegex, _ := regexp.Compile("v[0-9]+\\.[0-9]+\\.[0-9]+")
-			hasVersionSpecified := versionRegex.MatchString(version)
-
-			if !hasVersionSpecified {
+			if !self.isValidVersion(version) {
 				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
 				return
 			}
@@ -146,10 +141,7 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 			}
 
 			version := slackTextArguments[0]
-			versionRegex, _ := regexp.Compile("v[0-9]+\\.[0-9]+\\.[0-9]+")
-			hasVersionSpecified := versionRegex.MatchString(version)
-
-			if !hasVersionSpecified {
+			if !self.isValidVersion(version) {
 				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
 				return
 			}

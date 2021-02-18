@@ -2,7 +2,7 @@
  * File              : utils.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 04.01.2021
- * Last Modified Date: 09.02.2021
+ * Last Modified Date: 18.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -17,6 +17,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"regexp"
 
 	"github.com/slack-go/slack"
 )
@@ -97,6 +98,12 @@ func generateDefaultAnswerMention() string {
 	possibleAnswers := []string{"Hello there !", "What can I do for you!", "Work work work everyday, everyday the same work!", "Oh I hope this time it'll work!", "When can I'll take a break?"}
 	indexAnswer := rand.Intn(5)
 	return possibleAnswers[indexAnswer]
+}
+
+func (self *Server) isValidVersion(payload string) bool {
+	version := payload
+	versionRegex, _ := regexp.Compile("v[0-9]+\\.[0-9]+\\.[0-9]+")
+	return versionRegex.MatchString(version)
 }
 
 func initConfig() *ServerConfig {
