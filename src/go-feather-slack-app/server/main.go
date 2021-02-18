@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 12.02.2021
+ * Last Modified Date: 18.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -76,18 +76,16 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 
 func (self *Server) FetchJobPodLogs(podNamespace string, podName string, threadTs string) {
 	log.Printf("[BEFORE] GetPodLogs podNamespace=%s podName=%s", podNamespace, podName)
-	logs, err := self.manager.GetPodLogs(podNamespace, podName)
-	log.Printf("[AFTER] GetPodLogs err=%s logs=%s", err.Error(), logs)
+	logs, podStatus, err := self.manager.GetPodLogs(podNamespace, podName)
+	log.Printf("podStatus = %s", podStatus)
 
-	if err != nil && logs != "" {
-		self.sendSlackMessageWithClient(err.Error(), "")
-		self.sendSlackMessageWithClient(logs, "")
-		return
-	} else if err != nil {
+	if err != nil {
 		self.sendSlackMessageWithClient(err.Error(), "")
 		return
 	}
+
 	log.Printf("Sending back logs to slack channel")
+	self.sendSlackMessageWithClient("Job "+podName+" "+podStatus, threadTs)
 	self.sendSlackMessageWithClient(logs, threadTs)
 }
 
