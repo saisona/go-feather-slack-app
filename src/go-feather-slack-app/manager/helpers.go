@@ -2,7 +2,7 @@
  * File              : helpers.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 28.12.2020
- * Last Modified Date: 04.02.2021
+ * Last Modified Date: 18.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -22,17 +22,18 @@ type PodManager struct {
 
 type HandlerWaitingFunc func(watcher watch.Interface, pod *v1.Pod) error
 
-func DefaultHandlerWaitingFunc(watcher watch.Interface, pod *v1.Pod) error {
+func DefaultHandlerWaitingFunc(watcher watch.Interface, pod *v1.Pod) (string, error) {
+	var podPhase string
 	for event := range watcher.ResultChan() {
 		p, ok := event.Object.(*v1.Pod)
 		if !ok {
-			return errors.New("Unexpected type for *v1.Pod whithin watcher event loop")
+			return "", errors.New("Unexpected type for *v1.Pod whithin watcher event loop")
 		}
 		log.Printf("Pod %s is in state %s", p.GetName(), string(p.Status.Phase))
-		phase := string(p.Status.Phase)
-		if phase == "Succeeded" || phase == "Failed" {
+		podPhase = string(p.Status.Phase)
+		if podPhase == "Succeeded" || podPhase == "Failed" {
 			watcher.Stop()
 		}
 	}
-	return nil
+	return podPhase, nil
 }

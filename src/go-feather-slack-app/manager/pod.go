@@ -2,7 +2,7 @@
  * File              : pod.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 29.12.2020
- * Last Modified Date: 04.02.2021
+ * Last Modified Date: 18.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -31,25 +31,34 @@ func (self *PodManager) GetPod(namespace string, podName string) (*v1.Pod, error
 	return self.client.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 }
 
-func (self *PodManager) GetPodLogs(namespace string, podName string) (string, error) {
+// GetPodLogs: use namespace and podName args to fetch logs of an ended pod.
+// Most of the time, it is used for Jobs since waits for pod to be completed.
+//@args namespace: Namespace of the pod to watch for logs.
+//@args podName: Name of the pod's logs to fetch on previously specified namespace.
+//@returns (string, string, error):
+// string -> returns the logs of the ended pod.
+// string -> returns last post status (Completed/Error/Oom ...)
+// error -> any error from kubernetes api.
+func (self *PodManager) GetPodLogs(namespace string, podName string) (string, string, error) {
 	podLogOpts := v1.PodLogOptions{}
 	log.Printf("Getting logs from %s in namespace %s", podName, namespace)
 	pod, err := self.GetPod(namespace, podName)
 
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	if err := self.WaitForPodReady(namespace, pod); err != nil {
+	podPhase, err := self.WaitForPodReady(namespace, pod)
+	if err != nil {
 		log.Printf("Error while waiting for pod readiness : %s", err.Error())
-		return "", err
+		return "", "", err
 	}
 
 	req := self.client.CoreV1().Pods(namespace).GetLogs(podName, &podLogOpts)
 	reader, err := req.Stream()
 
 	if err != nil {
-		return "", err
+		return "", pod.Status.Reason, err
 	}
 
 	defer reader.Close()
@@ -57,22 +66,22 @@ func (self *PodManager) GetPodLogs(namespace string, podName string) (string, er
 
 	if err != nil {
 		log.Println("POD_READING_FAILURE : ", err.Error())
-		return "", errors.New("An error occured during reading pod logs, watch over server pod logs for more informations")
+		return "", pod.Status.Reason, errors.New("An error occured during reading pod logs, watch over server pod logs for more informations")
 	}
 
-	//TODO: handle podStatus to be able to determine if migration/seed failed
-	return string(body), nil
+	return string(body), podPhase, nil
 }
 
-func (self *PodManager) WaitForPodReady(namespace string, pod *v1.Pod) error {
+func (self *PodManager) WaitForPodReady(namespace string, pod *v1.Pod) (string, error) {
 	watcher, err := self.client.CoreV1().Pods(namespace).Watch(metav1.SingleObject(metav1.ObjectMeta{Namespace: namespace, Name: pod.GetName()}))
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	if err := DefaultHandlerWaitingFunc(watcher, pod); err != nil {
-		return err
+	podPhase, err := DefaultHandlerWaitingFunc(watcher, pod)
+	if err != nil {
+		return "", err
 	}
 
-	return nil
+	return podPhase, nil
 }
