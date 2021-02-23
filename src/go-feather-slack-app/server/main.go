@@ -2,7 +2,7 @@
  * File              : main.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 09.12.2020
- * Last Modified Date: 10.02.2021
+ * Last Modified Date: 18.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -76,18 +75,16 @@ func (self *Server) SubmitJobCreation(commandName string, slackTextArguments []s
 }
 
 func (self *Server) FetchJobPodLogs(podNamespace string, podName string, threadTs string) {
-	logs, err := self.manager.GetPodLogs(podNamespace, podName)
+	logs, podStatus, err := self.manager.GetPodLogs(podNamespace, podName)
+	log.Printf("podStatus = %s", podStatus)
 
-	log.Printf("res err:%s logs:%s", err.Error(), logs)
-	if err != nil && logs != "" {
-		self.sendSlackMessageWithClient(err.Error(), "")
-		self.sendSlackMessageWithClient(logs, "")
-		return
-	} else if err != nil {
+	if err != nil {
 		self.sendSlackMessageWithClient(err.Error(), "")
 		return
 	}
+
 	log.Printf("Sending back logs to slack channel")
+	self.sendSlackMessageWithClient("Job "+podName+" "+podStatus, threadTs)
 	self.sendSlackMessageWithClient(logs, threadTs)
 }
 
@@ -126,10 +123,7 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 			}
 
 			version := slackTextArguments[0]
-			versionRegex, _ := regexp.Compile("v[0-9]+\\.[0-9]+\\.[0-9]+")
-			hasVersionSpecified := versionRegex.MatchString(version)
-
-			if !hasVersionSpecified {
+			if !self.isValidVersion(version) {
 				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
 				return
 			}
@@ -151,10 +145,7 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 			}
 
 			version := slackTextArguments[0]
-			versionRegex, _ := regexp.Compile("v[0-9]+\\.[0-9]+\\.[0-9]+")
-			hasVersionSpecified := versionRegex.MatchString(version)
-
-			if !hasVersionSpecified {
+			if !self.isValidVersion(version) {
 				SendSlackMessage("You must specify a good version (eg. v.1.0.0) : "+version, w)
 				return
 			}
