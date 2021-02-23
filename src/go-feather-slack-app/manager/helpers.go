@@ -2,7 +2,7 @@
  * File              : helpers.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 28.12.2020
- * Last Modified Date: 18.02.2021
+ * Last Modified Date: 23.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
@@ -17,7 +17,7 @@ import (
 )
 
 type PodManager struct {
-	client *kubernetes.Clientset
+	client kubernetes.Interface
 }
 
 type HandlerWaitingFunc func(watcher watch.Interface, pod *v1.Pod) error
