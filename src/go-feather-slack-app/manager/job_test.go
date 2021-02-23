@@ -22,7 +22,7 @@ func NewFakePodManager() *PodManager {
 
 func TestDeleteJobNotExists(t *testing.T) {
 	podManager := NewFakePodManager()
-	podManager.client.BatchV1().(*fakebatchv1.FakeBatchV1).Fake.PrependReactor("*", "*", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+	podManager.client.BatchV1().(*fakebatchv1.FakeBatchV1).Fake.PrependReactor("delete", "batch/v1", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 		return false, nil, nil
 	})
 	err := podManager.DeleteJob("toto", "dummy-job")
@@ -35,7 +35,7 @@ func TestDeleteJobNotExists(t *testing.T) {
 
 func TestDeleteJobSuccess(t *testing.T) {
 	podManager := NewFakePodManager()
-	podManager.client.BatchV1().(*fakebatchv1.FakeBatchV1).Fake.PrependReactor("delete", "*", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+	podManager.client.BatchV1().(*fakebatchv1.FakeBatchV1).Fake.PrependReactor("delete", "batch/v1", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 		return true, nil, nil
 	})
 	err := podManager.DeleteJob("toto", "dummy-job")
@@ -101,14 +101,24 @@ func TestCreateCreateJobSpecWithEverything(t *testing.T) {
 
 func TestCreateCreateJobFailed(t *testing.T) {
 	podManager := NewFakePodManager()
-	podManager.client.BatchV1().(*fakebatchv1.FakeBatchV1).Fake.PrependReactor("create", "*", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+	podManager.client.BatchV1().(*fakebatchv1.FakeBatchV1).Fake.PrependReactor("create", "batch/v1", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 		return false, nil, nil
 	})
+	jobSpec := podManager.CreateJobSpec("prefix", "job", "image", nil, nil)
+	_, err := podManager.CreateJob("toto", "dummy", *jobSpec)
+	if err == nil {
+		t.Error("Failed, Should have failed")
+	}
 }
 
 func TestCreateCreateJobSucceed(t *testing.T) {
 	podManager := NewFakePodManager()
-	podManager.client.BatchV1().(*fakebatchv1.FakeBatchV1).Fake.PrependReactor("create", "*", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+	podManager.client.BatchV1().(*fakebatchv1.FakeBatchV1).Fake.PrependReactor("create", "batch/v1", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 		return true, nil, nil
 	})
+	jobSpec := podManager.CreateJobSpec("prefix", "job", "image", nil, nil)
+	_, err := podManager.CreateJob("toto", "dummy", *jobSpec)
+	if err != nil {
+		t.Errorf("Failed, wanted=%s, got=%s", "nil", err.Error())
+	}
 }
