@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	PodManager "github.com/saisona/go-feather-slack-app/src/go-feather-slack-app/manager"
 	"github.com/slack-go/slack"
 )
@@ -104,6 +105,8 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 			return
 		}
 
+		self.updateAvgJobTime()
+
 		switch s.Command {
 		case self.config.SEED_COMMAND:
 			slackTextArguments := strings.Fields(s.Text)
@@ -125,6 +128,7 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 				return
 			}
 
+			self.increaseSeedLaunched()
 			self.SubmitJobCreation(s.Command, slackTextArguments, w, r)
 		case self.config.MIGRATION_COMMAND:
 			slackTextArguments := strings.Fields(s.Text)
@@ -146,6 +150,7 @@ func (self *Server) handleSlackCommand() http.HandlerFunc {
 				return
 			}
 
+			self.increaseMigrationLaunched()
 			self.SubmitJobCreation(s.Command, slackTextArguments, w, r)
 			return
 		default:
@@ -174,9 +179,12 @@ func Listen(manager PodManager.PodManager) {
 		log.Panicln(err.Error())
 	}
 	server := New(appPort, manager)
+	server.recordMetrics()
+
 	http.HandleFunc("/", server.handleSlackCommand())
 	http.HandleFunc("/events", server.handleSlackEvent())
 	http.HandleFunc("/healthz", healthz)
+	http.Handle("/metrics", promhttp.Handler())
 
 	log.Println("Server started on port " + appPortStr)
 	if err := http.ListenAndServe(":"+appPortStr, nil); err != nil {

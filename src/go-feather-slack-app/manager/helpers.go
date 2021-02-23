@@ -22,6 +22,7 @@ type PodManager struct {
 
 type HandlerWaitingFunc func(watcher watch.Interface, pod *v1.Pod) error
 
+
 func DefaultHandlerWaitingFunc(watcher watch.Interface, pod *v1.Pod) (string, error) {
 	var podPhase string
 	for event := range watcher.ResultChan() {
