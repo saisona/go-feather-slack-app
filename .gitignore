@@ -16,3 +16,4 @@ vendor/
 .env
 *.yaml
 coverage.html
+go-feather-slack-app
