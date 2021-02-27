@@ -2,7 +2,7 @@
  * File              : utils.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 04.01.2021
- * Last Modified Date: 18.02.2021
+ * Last Modified Date: 27.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -92,6 +92,14 @@ func (self *Server) sendSlackMessageWithClient(message string, threadTs string) 
 		return "", err
 	}
 	return thread_ts, nil
+}
+
+func (self *Server) sendSlackBlockMessageWithClient(block slack.Message) error {
+	var Options slack.MsgOption
+	Options = slack.MsgOptionBlocks(block)
+	slack.MsgOptionPost()
+
+	self.slackClient.PostMessage(self.config.SLACK_ANSWER_CHANNEL_ID, Options)
 }
 
 func generateDefaultAnswerMention() string {

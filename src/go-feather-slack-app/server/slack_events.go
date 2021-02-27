@@ -2,7 +2,7 @@
  * File              : slack_events.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 23.01.2021
- * Last Modified Date: 09.02.2021
+ * Last Modified Date: 27.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package server
@@ -12,7 +12,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 
+	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
 
@@ -82,15 +84,79 @@ func (self *Server) handleSlackEvent() http.HandlerFunc {
 			switch ev := InnerEventData.(type) {
 			case *slackevents.AppMentionEvent:
 				log.Println("Found the mention")
-				textMessage := generateDefaultAnswerMention()
-				threadTs, err := self.sendSlackMessageWithClient(textMessage, "")
-				if err != nil {
-					log.Printf("Error when posting message on slack thread_ts=%s and err=%s", threadTs, err.Error())
-				}
+
+				// Remove the bot mention id
+				userSlackMessage := strings.SplitAfterN(ev.Text, " ", 1)
+				userId := ev.User
+				messageThreadTS := ev.ThreadTimeStamp
+				log.Printf("User %s send %s", userId, userSlackMessage)
+				self.handleMention(messageThreadTS, userId, userSlackMessage[0], strings.Join(userSlackMessage[1:], " "))
+
+				//textMessage := generateDefaultAnswerMention()
+				//threadTs, err := self.sendSlackMessageWithClient(textMessage, "")
+				//if err != nil {
+				//	log.Printf("Error when posting message on slack thread_ts=%s and err=%s", threadTs, err.Error())
+				//}
 			default:
 				log.Printf("Enter default = %+v", ev)
 			}
 
 		}
 	}
+}
+
+// handleMention is used to trigger action when mentioning slack bot based on the message.
+// @arg userId: Id of the Slack User who did mentioned the bot.
+// @arg actionType: substring of received slack message that triggers actions.
+// @arg args: rest of the slack message that can be used as action payload.
+func (self *Server) handleMention(threadTs string, userId string, actionType string, args string) {
+	log.Printf("Received from %s action %s with payload : %s", userId, actionType, args)
+
+	switch actionType {
+
+	case "list-models":
+		self.sendSlackMessageWithClient("Available models : ", threadTs)
+		//TODO : fetch deployed model through the API.
+		//TODO : authenticate user to API
+		//TODO : send authenticated request to https://api.inarix.com/imodels/model-template
+		//TODO : send authenticated request to https://api.inarix.com/imodels/model-instance
+		//TODO : for each model-template.prodModelInstanceId -> fetch name of model-instance.name with the same id
+	case ":rocket:":
+		//TODO : handle deploy model with api registration
+		log.Printf("Deploying model %s", args)
+		self.sendSlackMessageWithClient("What kind of model do you want to deploy?", threadTs)
+		self.sendModelDeployerPopup(userId)
+
+	default:
+		log.Printf("No actionType found to be handled")
+	}
+
+}
+
+func mapStrListToOptionBlock(options map[string]string, description string) *[]*slack.OptionBlockObject {
+	optionArray := make([]*slack.OptionBlockObject)
+	for key, value := range options {
+		text := &slack.TextBlockObject{Type: "plain_text", Text: key, Emoji: true}
+		desc := &slack.TextBlockObject{Type: "plain_text", Text: description, Emoji: true}
+		obj := slack.NewOptionBlockObject(value, text, desc)
+		append(optionArray, obj)
+	}
+	return optionArray
+}
+
+// sendModelDeployerPopup will send Slack block to help deploy model using slack
+// @arg userId: ID of the user who triggered model deployment
+func (self *Server) sendModelDeployerPopup(userId string) {
+	//TODO: Create Block type
+	//	contextName := &slack.TextBlockObject{Type: "plain_text", Text: "Deploy model on production :rocket:", Emoji: true}
+	contextName := slack.NewTextBlockObject("plain_text", "Deploy model on production :rocket:", true, true)
+	optionsSelect := mapStrListToOptionBlock(map[string]string{"barley-variety": "mt-barley-variety", "corn": "corn/dent", "Soft Wheat": "soft-wheat"})
+	//	staticSelect := slack.NewOptionsSelectBlockElement("static_select", &slack.TextBlockObject{Type: "plain_text"}, "deploy-model", *optionsSelect...)
+	//
+	//	messageToSend := slack.NewBlockMessage(contextName)
+	//	message := slack.AddBlockMessage(messageToSend, staticSelect)
+	//	slack.Add
+	//	messageOption := slack.MsgOptionBlocks(message, staticSelect)
+	//	self.slackClient.SendMessage(self.config.SLACK_ANSWER_CHANNEL_ID, messageOption)
+
 }
