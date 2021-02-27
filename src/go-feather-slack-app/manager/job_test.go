@@ -2,17 +2,19 @@
  * File              : job_test.go
  * Author            : Alexandre Saison <alexandre.saison@inarix.com>
  * Date              : 23.02.2021
- * Last Modified Date: 23.02.2021
+ * Last Modified Date: 26.02.2021
  * Last Modified By  : Alexandre Saison <alexandre.saison@inarix.com>
  */
 package podManager
 
 import (
+	"errors"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	fakebatchv1 "k8s.io/client-go/kubernetes/typed/batch/v1/fake"
+	fakecorev1 "k8s.io/client-go/kubernetes/typed/core/v1/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
 
@@ -101,13 +103,28 @@ func TestCreateCreateJobSpecWithEverything(t *testing.T) {
 
 func TestCreateCreateJobFailed(t *testing.T) {
 	podManager := NewFakePodManager()
-	podManager.client.BatchV1().(*fakebatchv1.FakeBatchV1).Fake.PrependReactor("create", "batch/v1", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
-		return false, nil, nil
+	fakeError := errors.New("dummy_error")
+	podManager.client.CoreV1().(*fakecorev1.FakeCoreV1).Fake.PrependReactor("create", "pods", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+		t.Log("!!!! ENTER CREATE POD!!!")
+		t.Logf("action=%+v", a)
+		return true, nil, nil
 	})
+	podManager.client.BatchV1().(*fakebatchv1.FakeBatchV1).Fake.PrependReactor("create", "jobs", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+		t.Log("!!!! ENTER CREATE JOB!!!")
+		t.Logf("action=%+v", a)
+		podManager.client.CoreV1().(*fakecorev1.FakeCoreV1).Fake.PrependReactor("create", "pods", func(a k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			t.Log("!!!! ENTER CREATE POD inside !!!")
+			t.Logf("action=%+v", a)
+			return true, nil, nil
+		})
+		return false, nil, fakeError
+	})
+
 	jobSpec := podManager.CreateJobSpec("prefix", "job", "image", nil, nil)
+	t.Log(jobSpec.Template.Name)
 	_, err := podManager.CreateJob("toto", "dummy", *jobSpec)
-	if err == nil {
-		t.Error("Failed, Should have failed")
+	if err == nil || !errors.Is(err, fakeError) {
+		t.Errorf("Failed, Should have failed with wanted=%s but got=%s", fakeError.Error(), err.Error())
 	}
 }
 
